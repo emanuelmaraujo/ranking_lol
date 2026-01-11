@@ -3,7 +3,7 @@
 import { TierTheme } from "@/lib/tier-themes";
 import { motion } from "framer-motion";
 import { Award, Star } from "lucide-react";
-import { CHAMPION_SPLASH_BASE } from "@/lib/constants";
+import { CHAMPION_SPLASH_BASE, DDRAGON_VERSION } from "@/lib/constants";
 import { normalizeChampionName } from "@/lib/utils";
 
 interface Mastery {
@@ -85,7 +85,7 @@ export function MasteryShowcase({ masteries, theme }: { masteries: Mastery[], th
                 {rest.map((m) => (
                     <div key={m.championId} className="flex items-center gap-3 p-2 rounded hover:bg-white/5 transition-colors group">
                         <img
-                            src={`https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${m.championId}.png`}
+                            src={`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${normalizeChampionName(m.championName)}.png`}
                             className="w-8 h-8 rounded-full border border-white/10 group-hover:border-white/30 grayscale group-hover:grayscale-0 transition-all"
                         />
                         <div className="flex-1 flex justify-between items-center">

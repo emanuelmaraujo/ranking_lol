@@ -1,5 +1,7 @@
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { DDRAGON_VERSION } from "@/lib/constants";
+import { normalizeChampionName } from "@/lib/utils";
 
 interface ChampionIconProps {
     championId: number;
@@ -30,7 +32,7 @@ export function ChampionIcon({ championId, championName, masteryLevel, points, s
     return (
         <div className={twMerge("relative group cursor-help", className)}>
             <img
-                src={`https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${championId}.png`}
+                src={`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${normalizeChampionName(championName)}.png`}
                 alt={championName || `Champion ${championId}`}
                 className={clsx(
                     "rounded-full border-2 transition-all",

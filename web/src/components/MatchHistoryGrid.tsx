@@ -4,6 +4,8 @@ import { MatchHistoryEntry } from '@/lib/api';
 import { TierTheme } from '@/lib/tier-themes';
 import { Swords, Shield, Crosshair, Zap, Trees, Grip, Clock, Skull, Trophy, Coins, Target } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { DDRAGON_VERSION } from '@/lib/constants';
+import { normalizeChampionName } from '@/lib/utils';
 
 interface Props {
     history: MatchHistoryEntry[];
@@ -88,7 +90,7 @@ function MatchRow({ match, theme, index, onClick }: { match: MatchHistoryEntry, 
             <div className="flex items-center gap-3 overflow-hidden">
                 <div className="relative shrink-0">
                     <img
-                        src={`https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${match.championId}.png`}
+                        src={`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${normalizeChampionName(match.championName)}.png`}
                         alt={match.championName}
                         className={`w-10 h-10 rounded-lg object-cover border border-white/10 ${isWin ? 'shadow-[0_0_10px_rgba(16,185,129,0.2)]' : ''}`}
                     />

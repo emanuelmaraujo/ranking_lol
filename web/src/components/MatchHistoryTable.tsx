@@ -2,6 +2,8 @@
 
 import { MatchHistoryEntry } from '@/lib/api';
 import { Swords, Shield, Crosshair, Zap, Trees, Grip } from 'lucide-react';
+import { DDRAGON_VERSION } from '@/lib/constants';
+import { normalizeChampionName } from '@/lib/utils';
 
 interface Props {
     history: MatchHistoryEntry[];
@@ -42,7 +44,7 @@ export function MatchHistoryTable({ history, onSelectMatch }: Props) {
                                     <div className="relative">
                                         {match.championId ? (
                                             <img
-                                                src={`https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${match.championId}.png`}
+                                                src={`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${normalizeChampionName(match.championName)}.png`}
                                                 alt={match.championName}
                                                 className="w-12 h-12 rounded-full border-2 border-gray-800 shadow-lg"
                                             />
@@ -127,7 +129,7 @@ export function MatchHistoryTable({ history, onSelectMatch }: Props) {
                                             <div className="relative">
                                                 {match.championId ? (
                                                     <img
-                                                        src={`https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${match.championId}.png`}
+                                                        src={`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${normalizeChampionName(match.championName)}.png`}
                                                         alt={match.championName}
                                                         className="w-10 h-10 rounded-full border-2 border-gray-800 group-hover:border-[var(--color-primary)] transition-colors shadow-lg"
                                                         width={40}

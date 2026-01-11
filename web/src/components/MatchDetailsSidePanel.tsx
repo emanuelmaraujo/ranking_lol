@@ -3,6 +3,8 @@
 import { MatchHistoryEntry } from "@/lib/api";
 import { X, Swords, Target, AlertCircle, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { DDRAGON_VERSION } from "@/lib/constants";
+import { normalizeChampionName } from "@/lib/utils";
 
 interface MatchDetailsSidePanelProps {
     match: MatchHistoryEntry | null;
@@ -61,7 +63,7 @@ export function MatchDetailsSidePanel({ match, onClose }: MatchDetailsSidePanelP
                                     <div className="relative mb-6">
                                         <div className={`absolute inset-0 rounded-full blur-2xl opacity-40 ${match.isVictory ? 'bg-emerald-500' : 'bg-red-500'}`} />
                                         <img
-                                            src={`https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${match.championId}.png`}
+                                            src={`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${normalizeChampionName(match.championName)}.png`}
                                             alt={match.championName}
                                             className={`relative w-32 h-32 rounded-full border-4 shadow-2xl ${match.isVictory ? 'border-emerald-500' : 'border-red-500'}`}
                                         />
