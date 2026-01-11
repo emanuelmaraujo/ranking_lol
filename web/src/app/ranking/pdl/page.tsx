@@ -8,6 +8,7 @@ import { TrendingUp, Calendar, RefreshCcw } from "lucide-react";
 import { TheClimber } from "@/components/pdl/TheClimber";
 import { TickerRow } from "@/components/pdl/TickerRow";
 import { Card } from "@/components/ui/Card";
+import Link from "next/link";
 
 export default function PdlRankingPage() {
     const { queueType } = useQueue();
@@ -128,30 +129,88 @@ export default function PdlRankingPage() {
                         </div>
                     )}
 
-                    {/* Ticker List */}
+                    {/* Ticker List - Mobile Card View (< md) */}
                     {movers.length > 0 && (
-                        <Card className="overflow-hidden border border-white/5 bg-black/20 backdrop-blur-sm shadow-2xl">
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr className="border-b border-white/5 text-gray-500 text-[10px] font-bold uppercase tracking-widest bg-white/5">
-                                            <th className="p-4 w-16 text-center">#</th>
-                                            <th className="p-4">Ativo (Jogador)</th>
-                                            <th className="p-4">Evolução</th>
-                                            <th className="p-4 text-right">Saldo (PDL)</th>
-                                            <th className="p-4 text-center">Tendência</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-white/5">
-                                        <AnimatePresence>
-                                            {movers.map((player, idx) => (
-                                                <TickerRow key={player.puuid} player={player} index={idx + 1} /> // Index +1 because top 1 is separate
-                                            ))}
-                                        </AnimatePresence>
-                                    </tbody>
-                                </table>
+                        <>
+                            <div className="md:hidden space-y-3">
+                                <AnimatePresence>
+                                    {movers.map((player, idx) => (
+                                        <motion.div
+                                            key={player.puuid}
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ delay: idx * 0.05 }}
+                                        >
+                                            <Card className="p-4 border-white/5 bg-black/20 overflow-hidden relative">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        {/* Rank */}
+                                                        <div className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 font-bold text-xs text-zinc-400">
+                                                            {idx + 1}
+                                                        </div>
+                                                        {/* Player */}
+                                                        <div className="flex flex-col">
+                                                            <Link href={`/player/${player.puuid}`} className="font-bold text-white text-sm truncate max-w-[120px]">
+                                                                {player.gameName}
+                                                            </Link>
+                                                            <span className="text-[10px] text-zinc-500 font-mono">#{player.tagLine}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Gain */}
+                                                    <div className="text-right">
+                                                        <div className={`text-lg font-bold tracking-tighter ${player.pdlGain > 0 ? 'text-emerald-400' : player.pdlGain < 0 ? 'text-red-400' : 'text-zinc-400'}`}>
+                                                            {player.pdlGain > 0 ? '+' : ''}
+                                                            {player.pdlGain}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Meta Row */}
+                                                <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/5">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="text-[9px] uppercase text-gray-500 font-bold">Elo</div>
+                                                        <div className="text-xs text-gray-300 font-medium">{player.tier} {player.rank}</div>
+                                                    </div>
+
+                                                    {/* Trend */}
+                                                    <div className={`px-2 py-0.5 rounded-full flex items-center gap-1 ${player.pdlGain > 0 ? 'bg-emerald-500/10' : player.pdlGain < 0 ? 'bg-red-500/10' : 'bg-white/5'}`}>
+                                                        <div className={`w-1.5 h-1.5 rounded-full ${player.pdlGain > 0 ? 'bg-emerald-500' : player.pdlGain < 0 ? 'bg-red-500' : 'bg-gray-500'}`} />
+                                                        <span className={`text-[10px] font-bold ${player.pdlGain > 0 ? 'text-emerald-400' : player.pdlGain < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                                                            {player.pdlGain > 0 ? 'Subindo' : player.pdlGain < 0 ? 'Descendo' : 'Estável'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </Card>
+                                        </motion.div>
+                                    ))}
+                                </AnimatePresence>
                             </div>
-                        </Card>
+
+                            {/* Desktop Table (md+) */}
+                            <Card className="hidden md:block overflow-hidden border border-white/5 bg-black/20 backdrop-blur-sm shadow-2xl">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="border-b border-white/5 text-gray-500 text-[10px] font-bold uppercase tracking-widest bg-white/5">
+                                                <th className="p-4 w-16 text-center">#</th>
+                                                <th className="p-4">Ativo (Jogador)</th>
+                                                <th className="p-4">Evolução</th>
+                                                <th className="p-4 text-right">Saldo (PDL)</th>
+                                                <th className="p-4 text-center">Tendência</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5">
+                                            <AnimatePresence>
+                                                {movers.map((player, idx) => (
+                                                    <TickerRow key={player.puuid} player={player} index={idx + 1} /> // Index +1 because top 1 is separate
+                                                ))}
+                                            </AnimatePresence>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </Card>
+                        </>
                     )}
                 </>
             )}

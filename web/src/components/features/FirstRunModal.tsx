@@ -1,35 +1,107 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { initPlayers } from '@/lib/api';
-import { Sparkles, Users, Search, Loader2, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Plus, Trash2, Trophy, Loader2, CheckCircle2 } from 'lucide-react';
 
 interface FirstRunModalProps {
     isOpen: boolean;
     onComplete: () => void;
 }
 
+// Memoized Player Row to prevent full-list re-renders on typing
+const PlayerInputRow = memo(({
+    player,
+    index,
+    isActive,
+    isRemovable,
+    onChange,
+    onRemove,
+    onFocus,
+    onBlur
+}: {
+    player: { gameName: string; tagLine: string };
+    index: number;
+    isActive: boolean;
+    isRemovable: boolean;
+    onChange: (index: number, field: 'gameName' | 'tagLine', value: string) => void;
+    onRemove: (index: number) => void;
+    onFocus: (index: number) => void;
+    onBlur: () => void;
+}) => (
+    <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: index * 0.05, duration: 0.3 }} // Faster stagger
+        className={`group relative flex items-center gap-3 rounded-xl border p-2 transition-all duration-200 ${isActive
+                ? 'border-emerald-500/50 bg-white/[0.03] shadow-[0_0_20px_rgba(16,185,129,0.1)]'
+                : 'border-white/5 bg-white/[0.02] hover:border-white/10'
+            }`}
+    >
+        <div className="flex flex-1 gap-2">
+            <div className="relative flex-1">
+                <input
+                    type="text"
+                    value={player.gameName}
+                    onFocus={() => onFocus(index)}
+                    onBlur={onBlur}
+                    onChange={(e) => onChange(index, 'gameName', e.target.value)}
+                    placeholder="Nome de Invocador"
+                    className="w-full rounded-lg bg-transparent px-4 py-3 text-sm font-medium text-white placeholder-zinc-600 outline-none transition-colors"
+                />
+            </div>
+            <div className="relative w-24">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 text-sm font-bold">#</span>
+                <input
+                    type="text"
+                    value={player.tagLine}
+                    onFocus={() => onFocus(index)}
+                    onBlur={onBlur}
+                    onChange={(e) => onChange(index, 'tagLine', e.target.value)}
+                    placeholder="TAG"
+                    className="w-full rounded-lg bg-transparent py-3 pl-7 pr-3 text-sm font-medium text-white placeholder-zinc-600 outline-none transition-colors"
+                />
+            </div>
+        </div>
+
+        {isRemovable && (
+            <button
+                onClick={() => onRemove(index)}
+                className="mr-2 rounded-lg p-2 text-zinc-500 opacity-0 transition-opacity duration-200 hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
+            >
+                <Trash2 className="h-4 w-4" />
+            </button>
+        )}
+    </motion.div>
+));
+
+PlayerInputRow.displayName = 'PlayerInputRow';
+
 export function FirstRunModal({ isOpen, onComplete }: FirstRunModalProps) {
     const [players, setPlayers] = useState([{ gameName: '', tagLine: '' }]);
     const [status, setStatus] = useState<'IDLE' | 'SYNCING' | 'SUCCESS'>('IDLE');
     const [error, setError] = useState('');
+    const [activeField, setActiveField] = useState<number | null>(null);
 
     const addField = () => {
         setPlayers([...players, { gameName: '', tagLine: '' }]);
     };
 
-    const removeField = (index: number) => {
-        if (players.length > 1) {
-            setPlayers(players.filter((_, i) => i !== index));
-        }
-    };
+    const removeField = useCallback((index: number) => {
+        setPlayers(prev => prev.filter((_, i) => i !== index));
+    }, []);
 
-    const handleChange = (index: number, field: 'gameName' | 'tagLine', value: string) => {
-        const newPlayers = [...players];
-        newPlayers[index][field] = value;
-        setPlayers(newPlayers);
-    };
+    const handleChange = useCallback((index: number, field: 'gameName' | 'tagLine', value: string) => {
+        setPlayers(prev => {
+            const newPlayers = [...prev];
+            newPlayers[index] = { ...newPlayers[index], [field]: value };
+            return newPlayers;
+        });
+    }, []);
+
+    const handleFocus = useCallback((index: number) => setActiveField(index), []);
+    const handleBlur = useCallback(() => setActiveField(null), []);
 
     const handleSubmit = async () => {
         const validPlayers = players.filter(p => p.gameName.trim() && p.tagLine.trim());
@@ -44,161 +116,192 @@ export function FirstRunModal({ isOpen, onComplete }: FirstRunModalProps) {
         try {
             const res = await initPlayers(validPlayers);
             if (res.failed.length > 0) {
-                setError(`Alguns falharam: ${res.failed.join(', ')}`);
-                // If at least one succeeded, we proceed after a delay
+                setError(`Falha ao adicionar: ${res.failed.join(', ')}`);
                 if (res.success.length > 0) {
-                    setTimeout(() => setStatus('SUCCESS'), 1500);
+                    setTimeout(() => setStatus('SUCCESS'), 2000);
                 } else {
                     setStatus('IDLE');
                 }
             } else {
-                // All good
                 setStatus('SUCCESS');
             }
         } catch (err) {
-            setError('Erro ao salvar. Tente novamente.');
+            setError('Erro de conexão. Tente novamente.');
             setStatus('IDLE');
             console.error(err);
         }
     };
 
-    // Auto-close on success
     if (status === 'SUCCESS') {
-        setTimeout(onComplete, 2000);
+        setTimeout(onComplete, 2500);
     }
 
     return (
         <AnimatePresence>
             {isOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    {/* Backdrop with Blur */}
+                    {/* Backdrop - Reduced Blur for Performance */}
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="absolute inset-0 bg-black/60 backdrop-blur-md"
+                        transition={{ duration: 0.3 }}
+                        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
                     />
 
+                    {/* Modal Container */}
                     <motion.div
-                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className="relative w-full max-w-xl bg-zinc-900/40 border border-white/10 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl"
+                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 25 }} // Snappier spring
+                        className="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-white/10 bg-[#0a0a0a] shadow-2xl"
                     >
-                        {/* Decorative Gradient Blob */}
-                        <div className="absolute -top-20 -right-20 w-64 h-64 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
-                        <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+                        {/* Static Glows (No blur filter on container to avoid double-hit) */}
+                        <div className="absolute -top-32 -right-32 h-64 w-64 rounded-full bg-emerald-500/10 blur-[80px]" />
+                        <div className="absolute -bottom-32 -left-32 h-64 w-64 rounded-full bg-blue-600/10 blur-[80px]" />
 
-                        <div className="p-8 relative">
-                            {/* Header */}
-                            <div className="text-center mb-8">
-                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-4 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-                                    <Sparkles className="w-8 h-8 text-emerald-400" />
-                                </div>
-                                <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">Bem-vindo ao Ranking</h2>
-                                <p className="text-zinc-400">Configure os jogadores para iniciar o monitoramento.</p>
+                        <div className="relative p-8 md:p-10">
+
+                            {/* Header Section */}
+                            <div className="mb-8 text-center">
+                                <motion.div
+                                    initial={{ scale: 0 }} animate={{ scale: 1 }}
+                                    transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
+                                    className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-blue-500/20 shadow-lg shadow-emerald-500/10 ring-1 ring-white/10"
+                                >
+                                    <Trophy className="h-10 w-10 text-emerald-400" />
+                                </motion.div>
+                                <motion.h2
+                                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.4 }}
+                                    className="text-3xl font-bold tracking-tight text-white"
+                                >
+                                    Configuração Inicial
+                                </motion.h2>
+                                <motion.p
+                                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.4 }}
+                                    className="mt-2 text-zinc-400"
+                                >
+                                    Adicione os invocadores que participarão do ranking.
+                                </motion.p>
                             </div>
 
-                            {/* Content based on Status */}
-                            {status === 'IDLE' && (
-                                <motion.div
-                                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                                    className="space-y-4"
-                                >
-                                    <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
-                                        {players.map((player, index) => (
-                                            <motion.div
-                                                key={index}
-                                                initial={{ opacity: 0, x: -10 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                className="group flex gap-3 items-center"
-                                            >
-                                                <div className="flex-1 grid grid-cols-[1fr,100px] gap-2 p-1 bg-zinc-950/50 rounded-lg border border-white/5 focus-within:border-emerald-500/50 transition-colors">
-                                                    <div className="relative">
-                                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Game Name"
-                                                            value={player.gameName}
-                                                            onChange={(e) => handleChange(index, 'gameName', e.target.value)}
-                                                            className="w-full bg-transparent border-none py-2.5 pl-9 pr-3 text-sm text-white focus:outline-none placeholder:text-zinc-600"
-                                                        />
-                                                    </div>
-                                                    <div className="relative border-l border-white/5">
-                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">#</span>
-                                                        <input
-                                                            type="text"
-                                                            placeholder="TAG"
-                                                            value={player.tagLine}
-                                                            onChange={(e) => handleChange(index, 'tagLine', e.target.value)}
-                                                            className="w-full bg-transparent border-none py-2.5 pl-6 pr-3 text-sm text-white focus:outline-none placeholder:text-zinc-600"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                {players.length > 1 && (
-                                                    <button
-                                                        onClick={() => removeField(index)}
-                                                        className="p-2 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-                                                        tabIndex={-1}
-                                                    >
-                                                        ✕
-                                                    </button>
-                                                )}
-                                            </motion.div>
-                                        ))}
-                                    </div>
+                            {/* Main Content Area */}
+                            <div className="min-h-[300px]">
+                                <AnimatePresence mode="wait">
 
-                                    <div className="flex justify-between items-center pt-2">
-                                        <button
-                                            onClick={addField}
-                                            className="text-sm flex items-center gap-2 text-emerald-400 hover:text-emerald-300 font-medium transition-colors px-2 py-1 rounded hover:bg-emerald-400/10"
+                                    {/* IDLE STATE: Form Input */}
+                                    {status === 'IDLE' && (
+                                        <motion.div
+                                            key="form"
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            exit={{ opacity: 0, x: 20 }}
+                                            transition={{ duration: 0.3, ease: 'easeOut' }}
+                                            className="space-y-6"
                                         >
-                                            <Users className="w-4 h-4" />
-                                            Adicionar Jogador
-                                        </button>
-                                        {error && <span className="text-xs text-red-400">{error}</span>}
-                                    </div>
+                                            <div className="max-h-[40vh] space-y-3 overflow-y-auto pr-2 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-zinc-800">
+                                                {players.map((player, index) => (
+                                                    <PlayerInputRow
+                                                        key={index}
+                                                        index={index}
+                                                        player={player}
+                                                        isActive={activeField === index}
+                                                        isRemovable={players.length > 1}
+                                                        onChange={handleChange}
+                                                        onRemove={removeField}
+                                                        onFocus={handleFocus}
+                                                        onBlur={handleBlur}
+                                                    />
+                                                ))}
+                                            </div>
 
-                                    <button
-                                        onClick={handleSubmit}
-                                        className="w-full mt-6 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/20 transition-all transform active:scale-[0.98]"
-                                    >
-                                        Iniciar Sincronização
-                                    </button>
-                                </motion.div>
-                            )}
+                                            <div className="flex items-center justify-between border-t border-white/5 pt-4">
+                                                <button
+                                                    onClick={addField}
+                                                    className="group flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
+                                                >
+                                                    <div className="flex h-5 w-5 items-center justify-center rounded-full border border-zinc-600 transition-colors group-hover:border-white">
+                                                        <Plus className="h-3 w-3" />
+                                                    </div>
+                                                    Adicionar outro
+                                                </button>
 
-                            {status === 'SYNCING' && (
-                                <motion.div
-                                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                                    className="py-12 flex flex-col items-center justify-center text-center space-y-6"
-                                >
-                                    <div className="relative">
-                                        <div className="absolute inset-0 bg-emerald-500/20 blur-xl rounded-full animate-pulse" />
-                                        <Loader2 className="w-16 h-16 text-emerald-400 animate-spin relative z-10" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-xl font-semibold text-white">Sincronizando Dados...</h3>
-                                        <p className="text-zinc-400 text-sm mt-1">Carregando histórico, elos e estatísticas da Riot API.</p>
-                                        <p className="text-zinc-500 text-xs mt-4">Isso pode levar alguns segundos.</p>
-                                    </div>
-                                </motion.div>
-                            )}
+                                                {error && (
+                                                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xs font-medium text-red-400">
+                                                        {error}
+                                                    </motion.p>
+                                                )}
+                                            </div>
 
-                            {status === 'SUCCESS' && (
-                                <motion.div
-                                    initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
-                                    className="py-12 flex flex-col items-center justify-center text-center space-y-4"
-                                >
-                                    <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center border border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.3)]">
-                                        <CheckCircle2 className="w-10 h-10 text-emerald-400" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-2xl font-bold text-white">Tudo Pronto!</h3>
-                                        <p className="text-zinc-400">O ranking foi criado com sucesso.</p>
-                                    </div>
-                                </motion.div>
-                            )}
+                                            <button
+                                                onClick={handleSubmit}
+                                                className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-4 text-sm font-bold tracking-wide text-white shadow-lg transition-all hover:scale-[1.01] hover:shadow-emerald-500/20 active:scale-[0.99]"
+                                            >
+                                                <div className="absolute inset-0 bg-white/20 opacity-0 transition-opacity group-hover:opacity-100" />
+                                                <span className="relative flex items-center justify-center gap-2">
+                                                    COMEÇAR JORNADA
+                                                    <Sparkles className="h-4 w-4 text-emerald-200" />
+                                                </span>
+                                            </button>
+                                        </motion.div>
+                                    )}
+
+                                    {/* SYNCING STATE: Pulse Loader */}
+                                    {status === 'SYNCING' && (
+                                        <motion.div
+                                            key="syncing"
+                                            initial={{ opacity: 0, scale: 0.9 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 1.1 }}
+                                            transition={{ duration: 0.4 }}
+                                            className="flex h-full flex-col items-center justify-center py-10"
+                                        >
+                                            <div className="relative mb-8 h-24 w-24">
+                                                <div className="absolute inset-0 animate-ping rounded-full bg-emerald-500/20" />
+                                                <div className="absolute inset-2 animate-pulse rounded-full bg-emerald-500/30 blur-xl" />
+                                                <div className="relative flex h-full w-full items-center justify-center rounded-full bg-black/40 shadow-inner ring-1 ring-emerald-500/30">
+                                                    <Loader2 className="h-10 w-10 animate-spin text-emerald-400" />
+                                                </div>
+                                            </div>
+                                            <h3 className="mb-2 text-xl font-bold text-white">Sincronizando Dados...</h3>
+                                            <p className="text-center text-sm text-zinc-400">
+                                                Buscando perfis, ícones, ranking e maestrias<br />diretamente da Riot Games.
+                                            </p>
+                                        </motion.div>
+                                    )}
+
+                                    {/* SUCCESS STATE: Celebration */}
+                                    {status === 'SUCCESS' && (
+                                        <motion.div
+                                            key="success"
+                                            initial={{ opacity: 0, scale: 0.8 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                                            className="flex h-full flex-col items-center justify-center py-10"
+                                        >
+                                            <motion.div
+                                                initial={{ scale: 0 }}
+                                                animate={{ scale: 1 }}
+                                                transition={{ type: "spring", bounce: 0.5 }}
+                                                className="mb-8 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 shadow-2xl shadow-emerald-500/40"
+                                            >
+                                                <CheckCircle2 className="h-12 w-12 text-white" />
+                                            </motion.div>
+                                            <h3 className="mb-2 text-2xl font-bold text-white">Tudo Pronto!</h3>
+                                            <p className="text-zinc-400">O sistema já está monitorando seus jogos.</p>
+                                        </motion.div>
+                                    )}
+
+                                </AnimatePresence>
+                            </div>
+                        </div>
+
+                        {/* Footer / Brand Details */}
+                        <div className="border-t border-white/5 bg-white/[0.01] px-10 py-4 text-center">
+                            <p className="text-[10px] font-medium uppercase tracking-widest text-zinc-600">
+                                Powered by Ranking.lol &bull; Secure Sync
+                            </p>
                         </div>
                     </motion.div>
                 </div>

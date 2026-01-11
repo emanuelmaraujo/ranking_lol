@@ -21,7 +21,7 @@ import { useQueue } from '@/contexts/QueueContext';
 import { HeroSection } from '@/components/home/HeroSection';
 import { WeeklySpotlight } from '@/components/home/WeeklySpotlight';
 import { HighlightsCarousel } from '@/components/home/HighlightsCarousel';
-import { WeeklyClimbers } from '@/components/home/WeeklyClimbers';
+import { WeeklyTrends } from '@/components/home/WeeklyTrends'; // Re-introduced
 import { Ticker } from '@/components/home/Ticker';
 
 type HomeData = {
@@ -163,12 +163,19 @@ export default function Home() {
   }
 
   return (
-    <div className="bg-[#050505] text-white selection:bg-emerald-500/30 w-full font-sans relative pb-32">
+    <div className="bg-[#050505] text-white selection:bg-emerald-500/30 w-full font-sans relative pb-32 overflow-hidden">
 
-      {/* 0. GLOBAL ATMOSPHERE */}
+      {/* 0. GLOBAL ATMOSPHERE & DECORATIONS */}
       <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute inset-0 opacity-[0.03] mix-blend-overlay bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
-        <div className="absolute inset-0 bg-gradient-to-br from-[#050505] via-[#050505] to-[#080c0a]" />
+        {/* Noise Texture */}
+        <div className="absolute inset-0 opacity-[0.04] mix-blend-overlay bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
+
+        {/* Deep Gradient Base - Less Pitch Black */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#080a09] via-[#050505] to-[#020202]" />
+
+        {/* Ambient Spots - Subtle Color */}
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-emerald-900/10 rounded-full blur-[120px] animate-pulse" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-violet-900/10 rounded-full blur-[120px] animate-pulse delay-1000" />
       </div>
 
       {/* 1. TICKER (Fixed under Topbar) */}
@@ -179,7 +186,7 @@ export default function Home() {
       <div className="relative z-10 w-full max-w-[1440px] mx-auto px-4 md:px-8 mt-16">
 
         {/* Spacer for aesthetics since header is gone */}
-        <div className="h-8" />
+        <div className="h-10" />
 
         {/* 2. HERO SECTION */}
         <HeroSection player={top1Player} pdlDelta={top1Delta} />
@@ -188,15 +195,18 @@ export default function Home() {
         <WeeklySpotlight mvp={mvpPlayer} antiMvp={antiMvpPlayer} />
 
         {/* 4. STORIES & CLIMBERS GRID */}
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-12 mb-24">
+        <div className="mb-24">
 
-          {/* Highlights (Stories) */}
-          <div className="xl:col-span-8">
-            <HighlightsCarousel fame={data.fame} shame={data.shame} />
+          {/* NEW: WEEKLY TRENDS (Restored PDL Part) */}
+          <div className="mb-12">
+            <WeeklyTrends trends={data.trends} />
           </div>
 
-          {/* Side Panel: Climbers & Losers */}
-          <WeeklyClimbers trends={data.trends} />
+          {/* Highlights (Stories) - Full Width */}
+          <div className="w-full">
+            <HighlightsCarousel fame={data.fame} shame={data.shame} trends={data.trends} ranking={data.ranking} />
+          </div>
+
         </div>
 
       </div>

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQueue } from "@/contexts/QueueContext";
+import Link from "next/link";
 
 // --- Configuration & Constants ---
 
@@ -249,19 +250,21 @@ export default function RankingPage() {
 
                                         {/* Avatar / Rank Insignia */}
                                         <div className="relative">
-                                            <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-yellow-400 to-amber-700 p-1 shadow-[0_0_40px_rgba(245,158,11,0.3)]">
-                                                <div className="w-full h-full rounded-full bg-black flex items-center justify-center overflow-hidden border-4 border-black">
-                                                    {/* Profile Icon Placeholder or Real Image */}
-                                                    {/* Profile Icon with Fallback */}
-                                                    <div className="w-full h-full relative">
-                                                        <ProfileImage
-                                                            profileIconId={topPlayer.profileIconId}
-                                                            className="w-full h-full"
-                                                        />
+                                            <Link href={`/player/${topPlayer.puuid}`}>
+                                                <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-yellow-400 to-amber-700 p-1 shadow-[0_0_40px_rgba(245,158,11,0.3)] cursor-pointer hover:scale-105 transition-transform">
+                                                    <div className="w-full h-full rounded-full bg-black flex items-center justify-center overflow-hidden border-4 border-black">
+                                                        {/* Profile Icon Placeholder or Real Image */}
+                                                        {/* Profile Icon with Fallback */}
+                                                        <div className="w-full h-full relative">
+                                                            <ProfileImage
+                                                                profileIconId={topPlayer.profileIconId}
+                                                                className="w-full h-full"
+                                                            />
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-600 to-amber-600 text-white text-xs md:text-sm font-bold px-4 py-1 rounded-full shadow-lg border border-yellow-400 whitespace-nowrap">
+                                            </Link>
+                                            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-600 to-amber-600 text-white text-xs md:text-sm font-bold px-4 py-1 rounded-full shadow-lg border border-yellow-400 whitespace-nowrap pointer-events-none">
                                                 TOP 1
                                             </div>
                                         </div>
@@ -276,10 +279,12 @@ export default function RankingPage() {
                                                             "Líder Global"}
                                                 </span>
                                             </div>
-                                            <h3 className="text-4xl md:text-5xl font-[family-name:var(--font-outfit)] font-black text-white mb-2 tracking-tight">
-                                                {topPlayer.gameName}
-                                                <span className="text-zinc-500 text-2xl font-normal ml-2 font-sans">#{topPlayer.tagLine}</span>
-                                            </h3>
+                                            <Link href={`/player/${topPlayer.puuid}`}>
+                                                <h3 className="text-4xl md:text-5xl font-[family-name:var(--font-outfit)] font-black text-white mb-2 tracking-tight hover:text-yellow-400 transition-colors cursor-pointer">
+                                                    {topPlayer.gameName}
+                                                    <span className="text-zinc-500 text-2xl font-normal ml-2 font-sans">#{topPlayer.tagLine}</span>
+                                                </h3>
+                                            </Link>
 
                                             <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 md:gap-8 text-sm md:text-lg text-gray-300 font-medium">
                                                 <div className="flex items-center gap-2">
@@ -319,8 +324,72 @@ export default function RankingPage() {
                         )}
                     </AnimatePresence>
 
-                    {/* Table */}
-                    <div className="bg-black/20 rounded-3xl border border-white/5 overflow-hidden backdrop-blur-sm">
+                    {/* Mobile Card View (< md) */}
+                    <div className="md:hidden space-y-4">
+                        {topData.slice(0, 50).map((player, index) => (
+                            <Card key={player.puuid} variant="glass" className="p-4 border-white/5 bg-black/20">
+                                <div className="flex items-center gap-4">
+                                    {/* Rank */}
+                                    <div className={`
+                                        flex items-center justify-center w-10 h-10 rounded-xl font-black text-lg
+                                        ${index === 0 ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20" :
+                                            index === 1 ? "bg-gray-300/10 text-gray-300 border border-gray-300/20" :
+                                                index === 2 ? "bg-orange-700/10 text-orange-500 border border-orange-700/20" :
+                                                    "bg-white/5 text-gray-500 border border-white/5"}
+                                    `}>
+                                        {index + 1}
+                                    </div>
+
+                                    {/* Player */}
+                                    <Link href={`/player/${player.puuid}`} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 transition-opacity">
+                                        <div className="w-10 h-10 rounded-full border border-white/10 overflow-hidden shrink-0">
+                                            <ProfileImage profileIconId={player.profileIconId} className="w-full h-full" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <div className="font-bold text-white truncate text-lg leading-tight">
+                                                {player.gameName}
+                                            </div>
+                                            <div className="text-xs text-gray-500 font-mono">#{player.tagLine}</div>
+                                        </div>
+                                    </Link>
+                                </div>
+
+                                {/* Stats Grid */}
+                                <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-white/5">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Elo</span>
+                                        <div className="flex items-center gap-1.5">
+                                            <div className={`w-1.5 h-1.5 rounded-full ${player.tier === "CHALLENGER" ? "bg-yellow-400" : "bg-gray-400"}`} />
+                                            <span className={`text-sm font-bold ${player.tier === "CHALLENGER" ? "text-yellow-400" : "text-gray-300"}`}>
+                                                {player.tier} {player.rankDivision}
+                                            </span>
+                                        </div>
+                                        <span className="text-xs text-gray-500">{player.lp} LP</span>
+                                    </div>
+
+                                    <div className="flex flex-col items-end">
+                                        <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">
+                                            {viewMode === "LANE" ? "Pontos" : "RiftScore"}
+                                        </span>
+                                        <span className="text-xl font-black text-emerald-400 leading-none">
+                                            {viewMode === "LANE"
+                                                ? (player.laneScores?.[activeLane] || 0).toLocaleString()
+                                                : player.totalScore.toFixed(0)
+                                            }
+                                        </span>
+                                    </div>
+                                </div>
+                            </Card>
+                        ))}
+                        {topData.length === 0 && (
+                            <div className="p-8 text-center text-gray-500 border border-dashed border-white/10 rounded-xl">
+                                Nenhum jogador encontrado.
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Desktop Table/Grid View (md+) */}
+                    <div className="hidden md:block bg-black/20 rounded-3xl border border-white/5 overflow-hidden backdrop-blur-sm">
 
                         {/* Custom Table Header */}
                         <div className="grid grid-cols-12 gap-4 p-4 border-b border-white/10 text-xs font-bold text-gray-500 uppercase tracking-wider">
@@ -355,7 +424,7 @@ export default function RankingPage() {
                                     </div>
 
                                     {/* Player Info */}
-                                    <div className="col-span-4 md:col-span-3 lg:col-span-3 flex items-center gap-3">
+                                    <Link href={`/player/${player.puuid}`} className="col-span-4 md:col-span-3 lg:col-span-3 flex items-center gap-3 hover:opacity-80 transition-opacity">
                                         <div className="w-10 h-10 rounded-full bg-black border border-white/10 overflow-hidden">
                                             <ProfileImage
                                                 profileIconId={player.profileIconId}
@@ -368,7 +437,7 @@ export default function RankingPage() {
                                             </div>
                                             <div className="text-xs text-gray-500">#{player.tagLine}</div>
                                         </div>
-                                    </div>
+                                    </Link>
 
                                     {/* Tier Info */}
                                     <div className="col-span-3 md:col-span-2 lg:col-span-2">

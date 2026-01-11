@@ -37,10 +37,10 @@ export function Topbar({ onMenuClick, isScrolled = false }: TopbarProps) {
 
             {/* Right: Queue Toggle */}
             <div className={`flex items-center gap-4 transition-all duration-500 ${isScrolled ? "opacity-60 hover:opacity-100" : "opacity-100"}`}>
-                <div className="flex bg-black/30 p-1.5 rounded-xl border border-white/5 backdrop-blur-md">
+                <div className="flex bg-black/30 p-1 rounded-xl border border-white/5 backdrop-blur-md">
                     <button
                         onClick={() => setQueueType("SOLO")}
-                        className={`px-6 py-2.5 rounded-lg text-sm font-bold font-[family-name:var(--font-outfit)] tracking-wider transition-all duration-300 ${queueType === "SOLO"
+                        className={`px-3 py-2 md:px-6 md:py-2.5 rounded-lg text-xs md:text-sm font-bold font-[family-name:var(--font-outfit)] tracking-wider transition-all duration-300 ${queueType === "SOLO"
                             ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/20"
                             : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
                             }`}
@@ -49,7 +49,7 @@ export function Topbar({ onMenuClick, isScrolled = false }: TopbarProps) {
                     </button>
                     <button
                         onClick={() => setQueueType("FLEX")}
-                        className={`px-6 py-2.5 rounded-lg text-sm font-bold font-[family-name:var(--font-outfit)] tracking-wider transition-all duration-300 ${queueType === "FLEX"
+                        className={`px-3 py-2 md:px-6 md:py-2.5 rounded-lg text-xs md:text-sm font-bold font-[family-name:var(--font-outfit)] tracking-wider transition-all duration-300 ${queueType === "FLEX"
                             ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/20"
                             : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
                             }`}

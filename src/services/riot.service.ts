@@ -134,15 +134,45 @@ export class RiotService {
     }
 
     /**
-     * Get Latest Skin for Champion (Data Dragon)
-     * Returns the splash URL of the most recent skin (last in the list)
+     * Get Random Skin for Champion (Data Dragon)
+     * Returns the splash URL of a RANDOM skin from the list (including default and legacy)
      */
-    async getLatestSkin(championName: string): Promise<{ name: string; splashUrl: string; loadingUrl: string } | null> {
+    async getRandomSkin(championName: string): Promise<{ name: string; splashUrl: string; loadingUrl: string } | null> {
         try {
-            // Normalize Name (e.g. Wukong -> MonkeyKing)
-            let cName = championName;
-            if (cName === 'Wukong') cName = 'MonkeyKing';
-            if (cName === 'RenataGlasc') cName = 'Renata';
+            // Normalize Name for Data Dragon
+            // 1. Explicit Overrides for Void/Special Characters
+            const overrides: Record<string, string> = {
+                'Wukong': 'MonkeyKing',
+                'Renata Glasc': 'Renata',
+                'RenataGlasc': 'Renata',
+                'Nunu & Willump': 'Nunu',
+                'Nunu&Willump': 'Nunu',
+                'Fiddlesticks': 'Fiddlesticks',
+                // Void & Special Casing
+                'Bel\'Veth': 'Belveth',
+                'Cho\'Gath': 'Chogath',
+                'Kai\'Sa': 'Kaisa',
+                'Kha\'Zix': 'Khazix',
+                'Kog\'Maw': 'KogMaw',
+                'K\'Sante': 'KSante',
+                'LeBlanc': 'Leblanc',
+                'Rek\'Sai': 'RekSai',
+                'Vel\'Koz': 'Velkoz',
+                // Common Typos / Internal Names
+                'KaiSa': 'Kaisa',
+                'VelKoz': 'Velkoz',
+                'ChoGath': 'Chogath',
+                'KhaZix': 'Khazix',
+                'BelVeth': 'Belveth'
+            };
+
+            let cName = overrides[championName] || championName;
+
+            // 2. Remove special characters (types like "Dr. Mundo" -> "DrMundo", "Master Yi" -> "MasterYi")
+            // This handles most standard names that just need spaces/dots removed while keeping case.
+            if (!overrides[championName]) {
+                cName = cName.replace(/[^a-zA-Z0-9]/g, '');
+            }
 
             // Fetch Champion Data
             // We use a fixed recent version or fetch standard
@@ -155,9 +185,10 @@ export class RiotService {
 
             if (!data || !data.skins || data.skins.length === 0) return null;
 
-            // Get last skin (usually newest)
-            // Filter out "default" (num 0) if we want a skin, or just take the very last one
-            const skin = data.skins[data.skins.length - 1];
+            // Pick a RANDOM skin
+            // Math.random() is exclusive of 1, so floor(random * length) gives valid index 0 to length-1
+            const randomIndex = Math.floor(Math.random() * data.skins.length);
+            const skin = data.skins[randomIndex];
 
             return {
                 name: skin.name,

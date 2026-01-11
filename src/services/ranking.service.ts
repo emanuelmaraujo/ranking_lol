@@ -149,7 +149,7 @@ export class RankingService {
         // Enrich Top 1 with Skin if RiotService is available
         if (results.length > 0 && this.riotService && results[0].mainChampion) {
             const top1 = results[0];
-            const skin = await this.riotService.getLatestSkin(top1.mainChampion.name);
+            const skin = await this.riotService.getRandomSkin(top1.mainChampion.name);
             if (skin) {
                 top1.skin = skin;
             }
