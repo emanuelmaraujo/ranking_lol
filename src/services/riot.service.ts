@@ -184,7 +184,7 @@ export class RiotService {
 
             // Fetch Champion Data
             // We use a fixed recent version or fetch standard
-            const version = '14.1.1'; // Ideally dynamic, but safe enough for now
+            const version = '16.1.1'; // Updated to 2026 Season
             const url = `https://ddragon.leagueoflegends.com/cdn/${version}/data/en_US/champion/${cName}.json`;
 
             // Bypass rate limiter for DataDragon (It's a CDN)
@@ -193,10 +193,13 @@ export class RiotService {
 
             if (!data || !data.skins || data.skins.length === 0) return null;
 
+            // Filter out default skin (num === 0) to ensure we show a REAL skin
+            const nonDefaultSkins = data.skins.filter((s: any) => s.num !== 0);
+            const pool = nonDefaultSkins.length > 0 ? nonDefaultSkins : data.skins;
+
             // Pick a RANDOM skin
-            // Math.random() is exclusive of 1, so floor(random * length) gives valid index 0 to length-1
-            const randomIndex = Math.floor(Math.random() * data.skins.length);
-            const skin = data.skins[randomIndex];
+            const randomIndex = Math.floor(Math.random() * pool.length);
+            const skin = pool[randomIndex];
 
             return {
                 name: skin.name,

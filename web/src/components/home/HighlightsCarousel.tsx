@@ -21,7 +21,7 @@ import {
     Medal,
     Crosshair
 } from 'lucide-react';
-import { HallOfFameData, HallOfShameData, PdlGainEntry, RankingEntry } from '@/lib/api';
+import { HallOfFameData, HallOfShameData, PdlGainEntry, RankingEntry, PeriodHighlights } from '@/lib/api';
 import { normalizeChampionName } from '@/lib/utils';
 import { DDRAGON_VERSION, CHAMPION_LOAD_BASE } from '@/lib/constants';
 
@@ -30,6 +30,7 @@ interface HighlightsCarouselProps {
     shame: HallOfShameData | null;
     trends: PdlGainEntry[];
     ranking: RankingEntry[];
+    highlights: PeriodHighlights | null;
 }
 
 type StoryCard = {
@@ -54,23 +55,16 @@ type StoryCard = {
 const TIERS = ['IRON', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'EMERALD', 'DIAMOND', 'MASTER', 'GRANDMASTER', 'CHALLENGER'];
 
 // Fallback Background (Generic Map Art or Abstract LoL art)
-const GENERIC_FALLBACK_BG = "https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Aatrox_0.jpg"; // Default temporary, but better:
+const GENERIC_FALLBACK_BG = "https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Aatrox_0.jpg";
 const MAP_ART = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/content/src/leagueclient/gamemodeassets/classic/img/scene/lobby-scene-bg.jpg";
 
 
 const GENERATED_STORY_COUNT = 3; // Duplicate list 3 times for "infinite" feel
 
-export function HighlightsCarousel({ fame, shame, trends, ranking = [] }: HighlightsCarouselProps) {
+export function HighlightsCarousel({ fame, shame, trends, ranking = [], highlights }: HighlightsCarouselProps) {
     const [cards, setCards] = useState<StoryCard[]>([]);
     const carouselRef = useRef<HTMLDivElement>(null);
-    const [width, setWidth] = useState(0);
 
-    // Update constraints width
-    useEffect(() => {
-        if (carouselRef.current) {
-            setWidth(carouselRef.current.scrollWidth - carouselRef.current.offsetWidth);
-        }
-    }, [cards]);
 
     // Data Processing
     useEffect(() => {
@@ -244,7 +238,7 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [] }: Highli
             value: 'ZICA', statLabel: 'IMPACTO', bgImage: getSplash(shame.moedaBronze.championName)
         });
 
-        // 4. CALCULATED STORIES
+        // 4. CALCULATED STORIES (Using PERIOD HIGHLIGHTS for Accuracy)
         // A. HOT STREAK (High Winrate)
         const hotStreakPlayer = ranking.filter(r => parseFloat(r.winRate) > 65 && r.gamesUsed > 10).sort((a, b) => parseInt(b.winRate) - parseInt(a.winRate))[0];
         if (hotStreakPlayer) {
@@ -269,20 +263,21 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [] }: Highli
             });
         }
 
-        // C. GRINDER (Many Games)
-        const grinder = ranking.sort((a, b) => b.gamesUsed - a.gamesUsed)[0];
-        if (grinder && grinder.gamesUsed > 20) {
+        // C. GRINDER (Many Games) -> From Weekly Highlights
+        if (highlights?.mostActive) {
+            const h = highlights.mostActive;
             list.push({
-                id: `grinder-${grinder.puuid}`, type: 'GRAY',
-                player: { gameName: grinder.gameName, profileIconId: grinder.profileIconId, championName: grinder.mainChampion?.name },
+                id: `grinder-${h.puuid}`, type: 'GRAY',
+                player: { gameName: h.gameName, profileIconId: h.profileIconId, championName: h.championName },
                 category: 'FOME DE JOGO', title: 'CARTEIRA DE TRABALHO?', icon: Gamepad2,
-                message: 'CLT NO LOLZINHO', subMessage: `${grinder.gamesUsed} partidas na semana. Guerreiro!`,
-                value: `${grinder.gamesUsed} JOGOS`, statLabel: 'DEDICAÇÃO', bgImage: getSplash(grinder.mainChampion?.name)
+                message: 'CLT NO LOLZINHO', subMessage: `${h.value} partidas na semana. Guerreiro!`,
+                value: `${h.value} JOGOS`, statLabel: 'DEDICAÇÃO', bgImage: getSplash(h.championName)
             });
         }
 
-        // D. VETERANO (Consistent Games)
-        const veteran = ranking.find(r => r.gamesUsed > 50 && r.puuid !== grinder?.puuid);
+        // D. VETERANO (Consistent Games) -> From Ranking (fallback if not grinder)
+        // Only show if different from grinder
+        const veteran = ranking.find(r => r.gamesUsed > 50 && r.puuid !== highlights?.mostActive?.puuid);
         if (veteran) {
             list.push({
                 id: `vet-${veteran.puuid}`, type: 'BLUE',
@@ -293,15 +288,15 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [] }: Highli
             });
         }
 
-        // E. OTP (One Trick Pony)
-        const otp = ranking.find(r => r.mainChampion && r.mainChampion.points > 100000 && r.gamesUsed > 5);
-        if (otp) {
+        // E. OTP (One Trick Pony) -> From Weekly Highlights (Strictly Verified)
+        if (highlights?.mono) {
+            const h = highlights.mono;
             list.push({
-                id: `otp-${otp.puuid}`, type: 'PURPLE',
-                player: { gameName: otp.gameName, profileIconId: otp.profileIconId, championName: otp.mainChampion?.name },
-                category: 'MONOCHAMP', title: `MONO ${otp.mainChampion?.name?.toUpperCase()}`, icon: Medal,
-                message: 'BANIU ACABOU O JOGO', subMessage: `Não sabe jogar de outra coisa, certeza.`,
-                value: 'MEU BONECO', statLabel: 'MAESTRIA', bgImage: getSplash(otp.mainChampion?.name)
+                id: `otp-${h.puuid}`, type: 'PURPLE',
+                player: { gameName: h.gameName, profileIconId: h.profileIconId, championName: h.championName },
+                category: 'MONOCHAMP', title: `MONO ${h.championName?.toUpperCase()}`, icon: Medal,
+                message: 'BANIU ACABOU O JOGO', subMessage: `${h.value} jogos só de ${h.championName}.`,
+                value: 'MEU BONECO', statLabel: 'MAESTRIA', bgImage: getSplash(h.championName)
             });
         }
 
@@ -319,7 +314,6 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [] }: Highli
         }
 
         // G. AZARADO (High Performance, Low Winrate)
-        // avgScore > 80 (Good) but WR < 45% (Bad)
         const azarado = ranking.find(r => r.avgScore > 80 && parseFloat(r.winRate) < 45);
         if (azarado) {
             list.push({
@@ -332,7 +326,6 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [] }: Highli
         }
 
         // H. CARREGADO (Low Performance, High Winrate)
-        // avgScore < 50 (Bad) but WR > 60% (Good)
         const carregado = ranking.find(r => r.avgScore < 50 && parseFloat(r.winRate) > 60);
         if (carregado) {
             list.push({
@@ -357,36 +350,72 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [] }: Highli
         }
 
         setCards(list.filter(c => c.player && c.player.gameName));
-    }, [fame, shame, trends, ranking]);
+    }, [fame, shame, trends, ranking, highlights]);
 
     // Auto-Scroll Logic
     const [isPaused, setIsPaused] = useState(false);
     const x = useRef(0);
     const containerRef = useRef<HTMLDivElement>(null);
     const animationFrameId = useRef<number | null>(null);
+    const singleSetWidthRef = useRef(0);
+
+    // Touch / Swipe Logic
+    const touchStart = useRef(0);
+    const touchStartXCurrent = useRef(0);
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        setIsPaused(true);
+        touchStart.current = e.touches[0].clientX;
+        touchStartXCurrent.current = x.current;
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        const currentTouch = e.touches[0].clientX;
+        const diff = currentTouch - touchStart.current;
+        x.current = touchStartXCurrent.current + diff;
+
+        // Immediate update to feel responsive
+        if (containerRef.current) {
+            containerRef.current.style.transform = `translate3d(${x.current}px, 0, 0)`;
+        }
+    };
+
+    // Optimization: Calculate width ONLY when cards change or window resizes
+    useEffect(() => {
+        const updateWidth = () => {
+            if (containerRef.current && cards.length > 0) {
+                const totalWidth = containerRef.current.scrollWidth;
+                singleSetWidthRef.current = totalWidth / GENERATED_STORY_COUNT;
+            }
+        };
+
+        const timeout = setTimeout(updateWidth, 100);
+        window.addEventListener('resize', updateWidth);
+        return () => {
+            window.removeEventListener('resize', updateWidth);
+            clearTimeout(timeout);
+        };
+    }, [cards]);
 
     useEffect(() => {
         const scroll = () => {
             if (isPaused || !containerRef.current) return;
 
-            x.current -= 0.5; // Speed: 0.5px per frame
+            x.current -= 1;
 
-            // Loop Logic: If we scrolled past the first set of cards, reset to 0
-            // Width of 1 card (320px) + gap (24px) = 344px
-            const singleSetWidth = cards.length * 344;
-
-            if (Math.abs(x.current) >= singleSetWidth) {
-                x.current = 0;
+            // Loop Logic using simple addition to avoid jumps
+            if (singleSetWidthRef.current > 0 && Math.abs(x.current) >= singleSetWidthRef.current) {
+                x.current += singleSetWidthRef.current; // Reset by adding width (since x is negative)
             }
 
             if (containerRef.current) {
-                containerRef.current.style.transform = `translateX(${x.current}px)`;
+                containerRef.current.style.transform = `translate3d(${x.current}px, 0, 0)`;
             }
 
             animationFrameId.current = requestAnimationFrame(scroll);
         };
 
-        if (cards.length > 0) { // SAFETY: Only run animation if we have cards
+        if (cards.length > 0) {
             animationFrameId.current = requestAnimationFrame(scroll);
         }
 
@@ -395,9 +424,7 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [] }: Highli
         };
     }, [isPaused, cards.length]);
 
-
-
-    // INFINITE SCROLL SIMULATION: Duplicate cards X times
+    // INFINITE SCROLL SIMULATION
     const infiniteCards = Array(GENERATED_STORY_COUNT).fill(cards).flat();
 
     return (
@@ -409,16 +436,30 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [] }: Highli
                 </h3>
             </div>
 
-            {/* Drag Container */}
+            {/* Drag Container with Mobile Support */}
             <div
                 className="overflow-hidden ml-[-5%]"
                 onMouseEnter={() => setIsPaused(true)}
                 onMouseLeave={() => setIsPaused(false)}
+                onTouchStart={() => setIsPaused(true)}
+                onTouchEnd={() => setIsPaused(false)}
             >
                 <div
                     ref={containerRef}
-                    className="flex gap-6 w-max px-8 py-12 cursor-grab active:cursor-grabbing"
-                    style={{ willChange: 'transform', backfaceVisibility: 'hidden' }} // Optimization: Promote to layer
+                    className="flex gap-6 w-max px-8 py-12 cursor-grab active:cursor-grabbing touch-pan-x"
+                    // Add Drag Support
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={() => setIsPaused(false)}
+                    onMouseDown={() => setIsPaused(true)}
+                    onMouseUp={() => setIsPaused(false)}
+                    style={{
+                        willChange: 'transform',
+                        backfaceVisibility: 'hidden',
+                        transformStyle: 'preserve-3d',
+                        perspective: 1000,
+                        WebkitFontSmoothing: 'antialiased'
+                    }}
                 >
                     {infiniteCards.map((card, idx) => (
                         <StoryCardComponent key={`${card.id}-${idx}`} card={card} />
@@ -450,11 +491,12 @@ function StoryCardComponent({ card }: { card: StoryCard }) {
     return (
         <motion.div
             className={`
-                relative w-[320px] h-[520px] rounded-[2rem] overflow-hidden 
+                relative w-[75vw] md:w-[320px] h-[520px] rounded-[2rem] overflow-hidden 
                 border ${theme.border} bg-[#0a0a0a] ${theme.shadow} shadow-2xl
                 group select-none flex-shrink-0
             `}
             whileHover={{ y: -5, scale: 1.02 }}
+            style={{ backfaceVisibility: 'hidden', transform: 'translateZ(0)' }} // Prevent edge flickering during scroll
             transition={{ type: 'spring', stiffness: 300, damping: 20 }}
         >
             {/* Background Image - Full Size with Vignette */}

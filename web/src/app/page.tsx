@@ -204,7 +204,7 @@ export default function Home() {
 
           {/* Highlights (Stories) - Full Width */}
           <div className="w-full">
-            <HighlightsCarousel fame={data.fame} shame={data.shame} trends={data.trends} ranking={data.ranking} />
+            <HighlightsCarousel fame={data.fame} shame={data.shame} trends={data.trends} ranking={data.ranking} highlights={data.highlights} />
           </div>
 
         </div>
