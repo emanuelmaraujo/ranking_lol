@@ -59,7 +59,7 @@ const GENERIC_FALLBACK_BG = "https://ddragon.leagueoflegends.com/cdn/img/champio
 const MAP_ART = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/content/src/leagueclient/gamemodeassets/classic/img/scene/lobby-scene-bg.jpg";
 
 
-const GENERATED_STORY_COUNT = 3; // Duplicate list 3 times for "infinite" feel
+const GENERATED_STORY_COUNT = 2; // Reduced to 2 to save VRAM and prevent layout thrashing on large textures
 
 export function HighlightsCarousel({ fame, shame, trends, ranking = [], highlights }: HighlightsCarouselProps) {
     const [cards, setCards] = useState<StoryCard[]>([]);
@@ -77,10 +77,26 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
         const getPlayerDetails = (puuid: string) => ranking.find(r => r.puuid === puuid);
         const getTierIndex = (tier: string) => TIERS.indexOf(tier.toUpperCase());
 
+        // Helper to get best available vertical image (Skin Loading > Base Loading)
+        const getBg = (player: RankingEntry | undefined, championName?: string) => {
+            // STRICT: Only return background if a specific champion context is provided
+            if (!championName) return undefined;
+
+            // Only use player's preferred skin if they are actually playing their main champion
+            const isMain = player?.mainChampion?.name &&
+                normalizeChampionName(player.mainChampion.name) === normalizeChampionName(championName);
+
+            if (isMain && player?.skin?.loadingUrl) return player.skin.loadingUrl;
+
+            return getSplash(championName);
+        };
+
+
         // 1. PROMOTIONS & DEMOTIONS
         trends.forEach(t => {
             const fullPlayer = getPlayerDetails(t.puuid);
-            const bg = fullPlayer?.skin?.splashUrl || getSplash(fullPlayer?.mainChampion?.name);
+            // GENERIC BG for Ranks (User request)
+            const bg = undefined;
 
             if (t.startTier && t.tier && t.startTier !== t.tier) {
                 const startIndex = getTierIndex(t.startTier);
@@ -108,138 +124,143 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
             }
         });
 
-        // 2. HALL OF FAME
+        // 2. HALL OF FAME (Context is always specific champion performance)
+        const getInsightBg = (p: { puuid: string, championName?: string }) => {
+            const ranked = ranking.find(r => r.puuid === p.puuid);
+            return getBg(ranked, p.championName);
+        };
+
         if (fame?.pentaKing) list.push({
             id: 'penta', type: 'GOLD', player: fame.pentaKing,
             category: 'DESTAQUE', title: 'SENHOR PENTAKILL', icon: Swords,
             message: 'DONO DO SERVIDOR', subMessage: 'Apenas entreguem o jogo',
-            value: 'PENTAKILL', statLabel: 'HIGHLIGHT', bgImage: getSplash(fame.pentaKing.championName)
+            value: 'PENTAKILL', statLabel: 'HIGHLIGHT', bgImage: getInsightBg(fame.pentaKing)
         });
         if (fame?.stomper) list.push({
             id: 'stomper', type: 'BLUE', player: fame.stomper,
             category: 'DOMINAÇÃO', title: 'PATRÃO DO EARLY', icon: Zap,
             message: 'GAMEPLAY DE 15 MIN', subMessage: 'Tá com pressa de almoçar?',
-            value: 'STOMP', statLabel: 'RITMO', bgImage: getSplash(fame.stomper.championName)
+            value: 'STOMP', statLabel: 'RITMO', bgImage: getInsightBg(fame.stomper)
         });
         if (fame?.damageEfficient) list.push({
             id: 'dmg', type: 'PINK', player: fame.damageEfficient,
             category: 'IMPACTO', title: 'DANO INFINITO', icon: Target,
             message: 'TOP DAMAGE', subMessage: 'Bateu na mãe? Respeita o dano!',
-            value: 'DANO', statLabel: 'PERFORMANCE', bgImage: getSplash(fame.damageEfficient.championName)
+            value: 'DANO', statLabel: 'PERFORMANCE', bgImage: getInsightBg(fame.damageEfficient)
         });
         if (fame?.farmMachine) list.push({
             id: 'farm', type: 'GREEN', player: fame.farmMachine,
             category: 'RECURSO', title: 'ASPIRADOR DE MINION', icon: Coins,
             message: '10CS POR MINUTO', subMessage: 'O farm tá em dia, e a vitória?',
-            value: 'RICO', statLabel: 'ECONOMIA', bgImage: getSplash(fame.farmMachine.championName)
+            value: 'RICO', statLabel: 'ECONOMIA', bgImage: getInsightBg(fame.farmMachine)
         });
         if (fame?.objectiveKing) list.push({
             id: 'objective', type: 'PURPLE', player: fame.objectiveKing,
             category: 'CONTROLE', title: 'SENHOR DRAGÃO', icon: Eye,
             message: 'MAPA É DELE', subMessage: 'Arauto, Dragão, Baron... tudo nosso.',
-            value: 'OBJETIVOS', statLabel: 'MACRO', bgImage: getSplash(fame.objectiveKing.championName)
+            value: 'OBJETIVOS', statLabel: 'MACRO', bgImage: getInsightBg(fame.objectiveKing)
         });
         if (fame?.lateDemon) list.push({
             id: 'late', type: 'PURPLE', player: fame.lateDemon,
             category: 'CLUTCH', title: 'REI DO LATE GAME', icon: Crown,
             message: 'NÃO DESISTE NUNCA', subMessage: 'O jogo só acaba quando o nexus cai',
-            value: 'ESCALANDO', statLabel: 'MENTAL', bgImage: getSplash(fame.lateDemon.championName)
+            value: 'ESCALANDO', statLabel: 'MENTAL', bgImage: getInsightBg(fame.lateDemon)
         });
         if (fame?.torreDemolidora) list.push({
             id: 'tower', type: 'ORANGE', player: fame.torreDemolidora,
             category: 'DEMOLIÇÃO', title: 'ZIGGS DA VIDA REAL', icon: Target,
             message: 'A TORRE CAIU', subMessage: 'Não deixa ele sozinho na lane...',
-            value: 'SPLIT', statLabel: 'ESTRUTURA', bgImage: getSplash(fame.torreDemolidora.championName)
+            value: 'SPLIT', statLabel: 'ESTRUTURA', bgImage: getInsightBg(fame.torreDemolidora)
         });
         if (fame?.jungleGod) list.push({
             id: 'jungle', type: 'GREEN', player: fame.jungleGod,
             category: 'SELVA', title: 'TARZAN DO RIFT', icon: Skull,
             message: 'A SELVA TEM DONO', subMessage: 'Invadiu a jungle dele? Azar.',
-            value: 'REI', statLabel: 'OBJETIVOS', bgImage: getSplash(fame.jungleGod.championName)
+            value: 'REI', statLabel: 'OBJETIVOS', bgImage: getInsightBg(fame.jungleGod)
         });
         if (fame?.earlyTyrant) list.push({
             id: 'early', type: 'RED', player: fame.earlyTyrant,
             category: 'PRESSÃO', title: 'BULLY DE LANE', icon: Swords,
             message: 'GG AOS 15', subMessage: 'Inimigo nem saiu da torre.',
-            value: 'AGRESSIVO', statLabel: 'PRESSÃO', bgImage: getSplash(fame.earlyTyrant.championName)
+            value: 'AGRESSIVO', statLabel: 'PRESSÃO', bgImage: getInsightBg(fame.earlyTyrant)
         });
         if (fame?.macroPerfect) list.push({
             id: 'macro', type: 'PURPLE', player: fame.macroPerfect,
             category: 'CÉREBRO', title: 'MENTE MILIONÁRIA', icon: Eye,
             message: 'XADREZ 4D', subMessage: 'Ganhou na inteligência, não na força.',
-            value: 'GÊNIO', statLabel: 'MACRO', bgImage: getSplash(fame.macroPerfect.championName)
+            value: 'GÊNIO', statLabel: 'MACRO', bgImage: getInsightBg(fame.macroPerfect)
         });
         if (fame?.soloClutch) list.push({
             id: 'clutch', type: 'GOLD', player: fame.soloClutch,
             category: 'HERÓI', title: 'SALVADOR DA PÁTRIA', icon: Crown,
             message: 'DEIXA COM O PAI', subMessage: 'Resolveu sozinho quando importava.',
-            value: 'DECISIVO', statLabel: 'DECISÃO', bgImage: getSplash(fame.soloClutch.championName)
+            value: 'DECISIVO', statLabel: 'DECISÃO', bgImage: getInsightBg(fame.soloClutch)
         });
         if (fame?.costasSeguras) list.push({
             id: 'shield', type: 'BLUE', player: fame.costasSeguras,
             category: 'PROTEÇÃO', title: 'PAREDE DE CONCRETO', icon: Anchor,
             message: 'DAQUI NÃO PASSA', subMessage: 'Protegeu o time como um leão.',
-            value: 'TANK', statLabel: 'SUPORTE', bgImage: getSplash(fame.costasSeguras.championName)
+            value: 'TANK', statLabel: 'SUPORTE', bgImage: getInsightBg(fame.costasSeguras)
         });
 
-        // 3. HALL OF SHAME
+        // 3. HALL OF SHAME (Context is specific champion performance)
         if (shame?.soloDoador) list.push({
             id: 'feeder', type: 'RED', player: shame.soloDoador,
             category: 'BAGRE', title: 'ALIMENTANDO...', icon: Skull,
             message: 'BUFFET LIBERADO', subMessage: 'Inimigo tá forte? culpa dele.',
-            value: 'FEEDER', statLabel: 'MEME', bgImage: getSplash(shame.soloDoador.championName)
+            value: 'FEEDER', statLabel: 'MEME', bgImage: getInsightBg(shame.soloDoador)
         });
         if (shame?.throwingStation && !shame.soloDoador) list.push({
             id: 'throw', type: 'ORANGE', player: shame.throwingStation,
             category: 'ENTREGADA', title: 'JOGADA DE OURO', icon: TrendingDown,
             message: 'A ARTE DO THROW', subMessage: 'O jogo tava ganho... estava.',
-            value: 'ENTREGOU', statLabel: 'MOMENTO', bgImage: getSplash(shame.throwingStation.championName)
+            value: 'ENTREGOU', statLabel: 'MOMENTO', bgImage: getInsightBg(shame.throwingStation)
         });
         if (shame?.visionNegligente) list.push({
             id: 'blind', type: 'GRAY', player: shame.visionNegligente,
             category: 'ESCURO', title: 'CEGUEIRA TOTAL', icon: Ghost,
             message: 'ECONOMIZOU NA WARD', subMessage: 'O mapa é DLC paga?',
-            value: '0 VISÃO', statLabel: 'VACILO', bgImage: getSplash(shame.visionNegligente.championName)
+            value: '0 VISÃO', statLabel: 'VACILO', bgImage: getInsightBg(shame.visionNegligente)
         });
         if (shame?.sonecaBaron) list.push({
             id: 'sleep', type: 'GRAY', player: shame.sonecaBaron,
             category: 'AUSENTE', title: 'SONINHO GOSTOSO', icon: Timer,
             message: 'ACORDA PRA VIDA', subMessage: 'Foi fazer um café e esqueceu?',
-            value: 'AFK', statLabel: 'FALTA', bgImage: getSplash(shame.sonecaBaron.championName)
+            value: 'AFK', statLabel: 'FALTA', bgImage: getInsightBg(shame.sonecaBaron)
         });
         if (shame?.killCollector) list.push({
             id: 'ks', type: 'RED', player: shame.killCollector,
             category: 'EGOÍSTA', title: 'SÓ MATA, NÃO GANHA', icon: Crosshair,
             message: 'MEDO DE MORRER', subMessage: 'KDA Player: Matou todos, perdeu o jogo.',
-            value: 'KDA', statLabel: 'INDIVIDUAL', bgImage: getSplash(shame.killCollector.championName)
+            value: 'KDA', statLabel: 'INDIVIDUAL', bgImage: getInsightBg(shame.killCollector)
         });
         if (shame?.lowDmg) list.push({
             id: 'pacifist', type: 'GRAY', player: shame.lowDmg,
             category: 'DA PAZ', title: 'O PACIFICADOR', icon: Anchor,
             message: 'ZERO DANO', subMessage: 'Veio só pra passear no mapa?',
-            value: 'PAZ', statLabel: 'DANO', bgImage: getSplash(shame.lowDmg.championName)
+            value: 'PAZ', statLabel: 'DANO', bgImage: getInsightBg(shame.lowDmg)
         });
         if (shame?.alface) list.push({
             id: 'alface', type: 'GREEN', player: shame.alface,
             category: 'MECÂNICA', title: 'MÃO DE ALFACE', icon: TrendingDown,
             message: 'ERROU TUDO', subMessage: 'O mouse tava sem fio?',
-            value: 'WHIFF', statLabel: 'SKILL', bgImage: getSplash(shame.alface.championName)
+            value: 'WHIFF', statLabel: 'SKILL', bgImage: getInsightBg(shame.alface)
         });
         if (shame?.telaPreta) list.push({
             id: 'grey', type: 'GRAY', player: shame.telaPreta,
             category: 'ABATE', title: 'SIMULADOR DE CINZA', icon: Ghost,
             message: 'SÓ VÊ O JOGO EM P&B', subMessage: 'Passou mais tempo morto que vivo.',
-            value: 'MORTO', statLabel: 'TEMPO', bgImage: getSplash(shame.telaPreta.championName)
+            value: 'MORTO', statLabel: 'TEMPO', bgImage: getInsightBg(shame.telaPreta)
         });
         if (shame?.moedaBronze) list.push({
             id: 'coin', type: 'ORANGE', player: shame.moedaBronze,
             category: 'AZAR', title: 'KRIPTONITA', icon: Skull,
             message: 'ONDE CAI PERDE', subMessage: 'O time chora quando vê no lobby.',
-            value: 'ZICA', statLabel: 'IMPACTO', bgImage: getSplash(shame.moedaBronze.championName)
+            value: 'ZICA', statLabel: 'IMPACTO', bgImage: getInsightBg(shame.moedaBronze)
         });
 
-        // 4. CALCULATED STORIES (Using PERIOD HIGHLIGHTS for Accuracy)
-        // A. HOT STREAK (High Winrate)
+        // 4. CALCULATED STORIES
+        // A. HOT STREAK - Generic
         const hotStreakPlayer = ranking.filter(r => parseFloat(r.winRate) > 65 && r.gamesUsed > 10).sort((a, b) => parseInt(b.winRate) - parseInt(a.winRate))[0];
         if (hotStreakPlayer) {
             list.push({
@@ -247,11 +268,11 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
                 player: { gameName: hotStreakPlayer.gameName, profileIconId: hotStreakPlayer.profileIconId, championName: hotStreakPlayer.mainChampion?.name },
                 category: 'ON FIRE', title: 'FOGUETE NÃO TEM RÉ', icon: Flame,
                 message: 'A FILA TÁ ANDANDO', subMessage: `${hotStreakPlayer.winRate}% de Vitórias - Tá smurfando?`,
-                value: 'SEQ. VITÓRIA', statLabel: 'MOMENTO', bgImage: getSplash(hotStreakPlayer.mainChampion?.name)
+                value: 'SEQ. VITÓRIA', statLabel: 'MOMENTO', bgImage: undefined
             });
         }
 
-        // B. SMURF DETECTED (Very High Winrate)
+        // B. SMURF DETECTED - Generic
         const smurf = ranking.find(r => parseFloat(r.winRate) > 75 && r.gamesUsed > 15);
         if (smurf && smurf.puuid !== hotStreakPlayer?.puuid) {
             list.push({
@@ -259,11 +280,11 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
                 player: { gameName: smurf.gameName, profileIconId: smurf.profileIconId, championName: smurf.mainChampion?.name },
                 category: 'ALIENÍGENA', title: 'FAKE NATTY', icon: Zap,
                 message: 'ISSO AQUI É SMURF', subMessage: `${smurf.winRate}% de WR. Alô Riot?`,
-                value: 'SMURF?', statLabel: 'DOMINAÇÃO', bgImage: getSplash(smurf.mainChampion?.name)
+                value: 'SMURF?', statLabel: 'DOMINAÇÃO', bgImage: undefined
             });
         }
 
-        // C. GRINDER (Many Games) -> From Weekly Highlights
+        // C. GRINDER (Many Games) - Generic (unless OTP)
         if (highlights?.mostActive) {
             const h = highlights.mostActive;
             list.push({
@@ -271,12 +292,11 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
                 player: { gameName: h.gameName, profileIconId: h.profileIconId, championName: h.championName },
                 category: 'FOME DE JOGO', title: 'CARTEIRA DE TRABALHO?', icon: Gamepad2,
                 message: 'CLT NO LOLZINHO', subMessage: `${h.value} partidas na semana. Guerreiro!`,
-                value: `${h.value} JOGOS`, statLabel: 'DEDICAÇÃO', bgImage: getSplash(h.championName)
+                value: `${h.value} JOGOS`, statLabel: 'DEDICAÇÃO', bgImage: undefined
             });
         }
 
-        // D. VETERANO (Consistent Games) -> From Ranking (fallback if not grinder)
-        // Only show if different from grinder
+        // D. VETERANO (Consistent Games) - Generic
         const veteran = ranking.find(r => r.gamesUsed > 50 && r.puuid !== highlights?.mostActive?.puuid);
         if (veteran) {
             list.push({
@@ -284,11 +304,11 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
                 player: { gameName: veteran.gameName, profileIconId: veteran.profileIconId, championName: veteran.mainChampion?.name },
                 category: 'VETERANO', title: 'MORADOR DO RIFT', icon: Anchor,
                 message: 'AQUI É DE CASA', subMessage: `Mais de 50 jogos. O Rift é o quintal dele.`,
-                value: 'VETERANO', statLabel: 'EXPERIÊNCIA', bgImage: getSplash(veteran.mainChampion?.name)
+                value: 'VETERANO', statLabel: 'EXPERIÊNCIA', bgImage: undefined
             });
         }
 
-        // E. OTP (One Trick Pony) -> From Weekly Highlights (Strictly Verified)
+        // E. OTP (One Trick Pony) - SPECIFIC (This is about the champion)
         if (highlights?.mono) {
             const h = highlights.mono;
             list.push({
@@ -296,11 +316,11 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
                 player: { gameName: h.gameName, profileIconId: h.profileIconId, championName: h.championName },
                 category: 'MONOCHAMP', title: `MONO ${h.championName?.toUpperCase()}`, icon: Medal,
                 message: 'BANIU ACABOU O JOGO', subMessage: `${h.value} jogos só de ${h.championName}.`,
-                value: 'MEU BONECO', statLabel: 'MAESTRIA', bgImage: getSplash(h.championName)
+                value: 'MEU BONECO', statLabel: 'MAESTRIA', bgImage: getInsightBg(h)
             });
         }
 
-        // F. TOP GAINER (PDL)
+        // F. TOP GAINER (PDL) - Generic
         const topGainer = trends.sort((a, b) => b.pdlGain - a.pdlGain)[0];
         if (topGainer && topGainer.pdlGain > 60) {
             const fullGainer = getPlayerDetails(topGainer.puuid);
@@ -309,11 +329,11 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
                 player: { gameName: topGainer.gameName, profileIconId: topGainer.profileIconId, championName: fullGainer?.mainChampion?.name },
                 category: 'ASCENSÃO', title: 'FOGUETE DA NASA', icon: Rocket,
                 message: 'NINGUÉM SEGURA', subMessage: `Ganhou insanamente +${topGainer.pdlGain} PDL`,
-                value: `+${topGainer.pdlGain}`, statLabel: 'PDL UP', bgImage: getSplash(fullGainer?.mainChampion?.name)
+                value: `+${topGainer.pdlGain}`, statLabel: 'PDL UP', bgImage: undefined
             });
         }
 
-        // G. AZARADO (High Performance, Low Winrate)
+        // G. AZARADO - Generic
         const azarado = ranking.find(r => r.avgScore > 80 && parseFloat(r.winRate) < 45);
         if (azarado) {
             list.push({
@@ -321,11 +341,11 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
                 player: { gameName: azarado.gameName, profileIconId: azarado.profileIconId, championName: azarado.mainChampion?.name },
                 category: 'AZARADO', title: 'JOGA MUITO, PERDE TUDO', icon: Ghost,
                 message: 'O INJUSTIÇADO', subMessage: `Nota ${azarado.avgScore} mas não ganha. Tistreza.`,
-                value: 'SADGE', statLabel: 'SORTE?', bgImage: getSplash(azarado.mainChampion?.name)
+                value: 'SADGE', statLabel: 'SORTE?', bgImage: undefined
             });
         }
 
-        // H. CARREGADO (Low Performance, High Winrate)
+        // H. CARREGADO - Generic
         const carregado = ranking.find(r => r.avgScore < 50 && parseFloat(r.winRate) > 60);
         if (carregado) {
             list.push({
@@ -333,11 +353,11 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
                 player: { gameName: carregado.gameName, profileIconId: carregado.profileIconId, championName: carregado.mainChampion?.name },
                 category: 'MOCHILA', title: 'MOCHILA DE GRIFE', icon: Anchor,
                 message: 'PESADO MAS GANHA', subMessage: `Nota ${carregado.avgScore}. O time que lute.`,
-                value: 'CARREGADO', statLabel: 'SORTE', bgImage: getSplash(carregado.mainChampion?.name)
+                value: 'CARREGADO', statLabel: 'SORTE', bgImage: undefined
             });
         }
 
-        // I. COIN FLIP (50% Winrate)
+        // I. COIN FLIP - Generic
         const coinFlip = ranking.find(r => parseFloat(r.winRate) >= 49 && parseFloat(r.winRate) <= 51 && r.gamesUsed > 20);
         if (coinFlip) {
             list.push({
@@ -345,7 +365,7 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
                 player: { gameName: coinFlip.gameName, profileIconId: coinFlip.profileIconId, championName: coinFlip.mainChampion?.name },
                 category: 'EQUILÍBRIO', title: 'O EQUILIBRISTA', icon: Target,
                 message: 'BALANCEADO', subMessage: '50% de chance de ganhar. Thanos orgulhoso.',
-                value: '50/50', statLabel: 'CONSISTÊNCIA', bgImage: getSplash(coinFlip.mainChampion?.name)
+                value: '50/50', statLabel: 'CONSISTÊNCIA', bgImage: undefined
             });
         }
 
@@ -493,11 +513,9 @@ function StoryCardComponent({ card }: { card: StoryCard }) {
             className={`
                 relative w-[75vw] md:w-[320px] h-[520px] rounded-[2rem] overflow-hidden 
                 border ${theme.border} bg-[#0a0a0a] ${theme.shadow} shadow-2xl
-                group select-none flex-shrink-0
+                group select-none flex-shrink-0 transition-transform duration-300 hover:-translate-y-1
             `}
-            whileHover={{ y: -5, scale: 1.02 }}
             style={{ backfaceVisibility: 'hidden', transform: 'translateZ(0)' }} // Prevent edge flickering during scroll
-            transition={{ type: 'spring', stiffness: 300, damping: 20 }}
         >
             {/* Background Image - Full Size with Vignette */}
             <div className="absolute inset-0 z-0">
@@ -505,7 +523,7 @@ function StoryCardComponent({ card }: { card: StoryCard }) {
                     <img
                         src={card.bgImage}
                         alt="Background"
-                        className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-all duration-700 group-hover:scale-110 grayscale-[30%] group-hover:grayscale-0"
+                        className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-700 grayscale-[30%] group-hover:grayscale-0"
                         onError={(e) => { (e.target as HTMLImageElement).src = fallbackProfileIcon; }}
                     />
                 ) : (

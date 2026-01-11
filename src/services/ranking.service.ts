@@ -146,13 +146,16 @@ export class RankingService {
             rank: index + 1
         }));
 
-        // Enrich Top 1 with Skin if RiotService is available
-        if (results.length > 0 && this.riotService && results[0].mainChampion) {
-            const top1 = results[0];
-            const skin = await this.riotService.getRandomSkin(top1.mainChampion.name);
-            if (skin) {
-                top1.skin = skin;
-            }
+        // Enrich ALL players with Skin if RiotService is available
+        if (results.length > 0 && this.riotService) {
+            await Promise.all(results.map(async (player) => {
+                if (player.mainChampion) {
+                    const skin = await this.riotService!.getRandomSkin(player.mainChampion.name);
+                    if (skin) {
+                        player.skin = skin;
+                    }
+                }
+            }));
         }
 
         return results;
@@ -758,8 +761,8 @@ export class RankingService {
         let nextUpdate = null;
 
         if (lastUpdate) {
-            // Next update is 1 hour after last
-            nextUpdate = new Date(lastUpdate.getTime() + 1 * 60 * 60 * 1000);
+            // Next update is 30 minutes after last
+            nextUpdate = new Date(lastUpdate.getTime() + 30 * 60 * 1000);
         }
 
         return {

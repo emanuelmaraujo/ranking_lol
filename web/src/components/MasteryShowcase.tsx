@@ -3,6 +3,8 @@
 import { TierTheme } from "@/lib/tier-themes";
 import { motion } from "framer-motion";
 import { Award, Star } from "lucide-react";
+import { CHAMPION_SPLASH_BASE } from "@/lib/constants";
+import { normalizeChampionName } from "@/lib/utils";
 
 interface Mastery {
     championId: number;
@@ -47,7 +49,7 @@ export function MasteryShowcase({ masteries, theme }: { masteries: Mastery[], th
                         {/* Splash Art Info */}
                         <div className="absolute inset-0 z-0">
                             <img
-                                src={m.skin?.splashUrl || `https://cdn.communitydragon.org/latest/champion/${m.championId}/splash-art/centered`}
+                                src={m.skin?.splashUrl || `${CHAMPION_SPLASH_BASE}/${normalizeChampionName(m.championName)}_0.jpg`}
                                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-60 group-hover:opacity-80"
                                 alt={m.skin?.name || m.championName}
                                 style={{ objectPosition: 'center 20%' }}

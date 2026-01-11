@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { getSeasonRanking, RankingEntry } from "@/lib/api";
+import { getSeasonRanking, RankingEntry, getHighlights, getPdlGainRanking } from "@/lib/api";
 // import { RankingTable } from "@/components/RankingTable";
 import { Card } from "@/components/ui/Card";
 import { ProfileImage } from "@/components/ui/ProfileImage";
@@ -68,18 +68,33 @@ export default function RankingPage() {
     const [activeLane, setActiveLane] = useState("MID"); // Default to Mid or Top
 
     // --- Data Fetching ---
+    // --- Data Fetching ---
+    const [highlights, setHighlights] = useState<any>(null); // Simplified
+    const [topGainer, setTopGainer] = useState<any>(null);
+
     useEffect(() => {
         setLoading(true);
-        getSeasonRanking(queueType).then((res) => {
-            setPlayers(res);
-            setLoading(false);
-        });
+        const fetchData = async () => {
+            try {
+                const [rankData, hlData, gainData] = await Promise.all([
+                    getSeasonRanking(queueType),
+                    getHighlights(queueType), // Uses API
+                    getPdlGainRanking(queueType, 5, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+                ]);
+                setPlayers(rankData);
+                setHighlights(hlData);
+                setTopGainer(gainData[0]); // Best gainer
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
     }, [queueType]);
 
     // --- Logic: Memoized Sorting & Filtering ---
     const topData = useMemo(() => {
         let processed = [...players];
-
+        // ... (existing logic)
         // 1. Filter Logic
         if (viewMode === "TIER" && activeTier !== "ALL") {
             processed = processed.filter(p => p.tier === activeTier);
@@ -87,21 +102,16 @@ export default function RankingPage() {
 
         // 2. Sort Logic
         if (viewMode === "LANE") {
-            // Sort by specific LANE score, NOT total score
+            // ...
             processed.sort((a, b) => {
                 const scoreA = a.laneScores?.[activeLane] || 0;
                 const scoreB = b.laneScores?.[activeLane] || 0;
                 return scoreB - scoreA;
             });
-            // Filter out players with 0 score in this lane (optional, keeps list clean)
             processed = processed.filter(p => (p.laneScores?.[activeLane] || 0) > 0);
-
         } else if (viewMode === "GLOBAL") {
-            // Sort by Total Score
             processed.sort((a, b) => b.totalScore - a.totalScore);
-
         } else {
-            // TIER: Sort by Elo Value (LP)
             processed.sort((a, b) => getEloValue(b) - getEloValue(a));
         }
 
@@ -114,6 +124,57 @@ export default function RankingPage() {
 
     return (
         <div className="space-y-8 animate-in fade-in duration-700 pb-12">
+
+            {/* --- INSIGHTS SECTION (New) --- */}
+            {!loading && (highlights || topGainer) && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    {/* 1. Top Gainer */}
+                    {topGainer && (
+                        <div className="bg-gradient-to-br from-emerald-900/40 to-black border border-emerald-500/20 rounded-2xl p-4 flex items-center gap-4 relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-emerald-500/5 group-hover:bg-emerald-500/10 transition-colors" />
+                            <div className="relative z-10 p-3 bg-emerald-500/20 rounded-full text-emerald-400">
+                                <Zap size={24} />
+                            </div>
+                            <div className="relative z-10">
+                                <h4 className="text-xs font-bold uppercase text-emerald-400 tracking-wider mb-1">Subiu d+</h4>
+                                <div className="text-white font-bold text-lg leading-none">{topGainer.gameName}</div>
+                                <div className="text-emerald-300 text-sm font-bold">+{topGainer.pdlGain} PDL <span className="text-zinc-500 text-xs font-normal">na semana</span></div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 2. Hot Streak (MVP or Survivor) */}
+                    {highlights?.mvp && (
+                        <div className="bg-gradient-to-br from-orange-900/40 to-black border border-orange-500/20 rounded-2xl p-4 flex items-center gap-4 relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-orange-500/5 group-hover:bg-orange-500/10 transition-colors" />
+                            <div className="relative z-10 p-3 bg-orange-500/20 rounded-full text-orange-400">
+                                <Trophy size={24} />
+                            </div>
+                            <div className="relative z-10">
+                                <h4 className="text-xs font-bold uppercase text-orange-400 tracking-wider mb-1">MVP da Semana</h4>
+                                <div className="text-white font-bold text-lg leading-none">{highlights.mvp.gameName}</div>
+                                <div className="text-orange-300 text-sm font-bold">{highlights.mvp.value} <span className="text-zinc-500 text-xs font-normal">Score</span></div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 3. Most Active */}
+                    {highlights?.mostActive && (
+                        <div className="bg-gradient-to-br from-blue-900/40 to-black border border-blue-500/20 rounded-2xl p-4 flex items-center gap-4 relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-blue-500/5 group-hover:bg-blue-500/10 transition-colors" />
+                            <div className="relative z-10 p-3 bg-blue-500/20 rounded-full text-blue-400">
+                                <Swords size={24} />
+                            </div>
+                            <div className="relative z-10">
+                                <h4 className="text-xs font-bold uppercase text-blue-400 tracking-wider mb-1">Sem Vida</h4>
+                                <div className="text-white font-bold text-lg leading-none">{highlights.mostActive.gameName}</div>
+                                <div className="text-blue-300 text-sm font-bold">{highlights.mostActive.value} <span className="text-zinc-500 text-xs font-normal">partidas</span></div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
 
             {/* Header with Mode Switcher */}
             <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">

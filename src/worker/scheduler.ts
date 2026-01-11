@@ -106,6 +106,8 @@ async function startScheduler() {
                 console.log('🔄 [SCHEDULER] Starting Update Cycle...');
 
                 // Serial Execution
+                // User Request: Fetch Icons/Level (Sync-Players) + Ranks (Sync-Ranks) every 30m
+                await runJob('sync-players', async () => await runSyncPlayers());
                 await runJob('sync-ranks', async () => await runSyncRanks());
                 await runJob('ingest-batch', async () => await runIngestBatch());
 
@@ -128,7 +130,8 @@ async function startScheduler() {
             isJobRunning = false;
 
             // Schedule next run
-            const delayMinutes = success ? 60 : 30; // 1 Hour vs 30 Minutes
+            // User requested: 30 minutes interval
+            const delayMinutes = 30;
             const nextRun = new Date(Date.now() + delayMinutes * 60 * 1000);
 
             console.log(`⏳ [SCHEDULER] Next Update Cycle in ${delayMinutes} minutes (${nextRun.toLocaleTimeString()})`);

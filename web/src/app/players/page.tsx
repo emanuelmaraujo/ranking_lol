@@ -13,6 +13,9 @@ import { Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useQueue } from "@/contexts/QueueContext";
 
+import { normalizeChampionName } from "@/lib/utils";
+import { CHAMPION_LOAD_BASE } from "@/lib/constants";
+
 function PlayersContent() {
     const [players, setPlayers] = useState<RankingEntry[]>([]);
     const [loading, setLoading] = useState(true);
@@ -172,70 +175,87 @@ function PlayersContent() {
             {loading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {[...Array(8)].map((_, i) => (
-                        <div key={i} className="h-48 bg-white/5 rounded-2xl animate-pulse" />
+                        <div key={i} className="h-64 bg-white/5 rounded-2xl animate-pulse" />
                     ))}
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {filtered.map((player) => (
-                        <Card key={player.puuid} variant="glass" className="p-0 overflow-hidden group hover:border-indigo-500/30 transition-all duration-300">
-                            <Link href={`/player/${player.puuid}?queue=${queueType}`}>
-                                <div className="p-6 flex flex-col items-center text-center relative">
-                                    {/* Hover Effect Background */}
-                                    <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/0 to-indigo-500/0 group-hover:to-indigo-500/5 transition-all duration-500" />
+                    {filtered.map((player) => {
+                        const bgImage = player.skin?.loadingUrl || (player.mainChampion ? `${CHAMPION_LOAD_BASE}/${normalizeChampionName(player.mainChampion.name)}_0.jpg` : undefined);
 
-                                    <PlayerAvatar
-                                        profileIconId={player.profileIconId}
-                                        summonerLevel={player.summonerLevel}
-                                        size="xl"
-                                        className="mb-4 shadow-2xl"
-                                        tier={player.tier}
-                                        ringColor={player.rank === 1 ? 'border-yellow-400 shadow-yellow-500/40' : undefined}
-                                    />
+                        return (
+                            <Link key={player.puuid} href={`/player/${player.puuid}?queue=${queueType}`}>
+                                <div className="relative w-full h-[400px] rounded-[2rem] overflow-hidden group shadow-lg transition-transform hover:-translate-y-1 bg-[#0a0a0a] border border-white/10">
 
-                                    <h3 className="text-xl font-[family-name:var(--font-outfit)] font-bold text-white group-hover:text-indigo-400 transition-colors">
-                                        {player.gameName}
-                                    </h3>
-                                    <span className="text-xs text-gray-500 font-mono mb-4">#{player.tagLine}</span>
-
-                                    <div className="flex items-center gap-2 mb-6">
-                                        <EloBadge tier={player.tier} rank={player.rankDivision} className="scale-90" />
-                                        <div className="text-sm font-[family-name:var(--font-outfit)] font-bold text-gray-300">
-                                            {player.lp} <span className="text-[10px] text-gray-500 uppercase">PDL</span>
-                                        </div>
+                                    {/* BACKGROUND IMAGE (Full Card) - The Redesign */}
+                                    <div className="absolute inset-0 z-0">
+                                        {bgImage ? (
+                                            <img
+                                                src={bgImage}
+                                                className="w-full h-full object-cover object-top opacity-60 group-hover:opacity-80 group-hover:scale-102 transition-all duration-700"
+                                                alt={player.mainChampion?.name || "Background"}
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full bg-gradient-to-br from-indigo-900 via-gray-900 to-black" />
+                                        )}
+                                        {/* Overlays for readability */}
+                                        <div className="absolute inset-x-0 bottom-0 h-3/4 bg-gradient-to-t from-black via-black/80 to-transparent" />
+                                        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/60 to-transparent" />
                                     </div>
 
-                                    {/* Main Champion Mini-Display */}
-                                    {player.mainChampion && (
+                                    {/* CONTENT (Relative z-10) */}
+                                    <div className="relative z-10 h-full flex flex-col items-center justify-end pb-8 p-6 text-center">
+
+                                        {/* Tier Badge (Floating Top Right) */}
                                         <div className="absolute top-4 right-4">
-                                            <ChampionIcon
-                                                championId={player.mainChampion.id}
-                                                size="sm"
-                                                masteryLevel={player.mainChampion.level}
-                                                className="opacity-50 group-hover:opacity-100 transition-opacity"
+                                            <EloBadge tier={player.tier} rank={player.rankDivision} className="scale-75 origin-top-right" />
+                                        </div>
+
+                                        {/* Avatar (Floating Top Center, but moved down slightly) */}
+                                        <div className="absolute top-8 left-1/2 -translate-x-1/2">
+                                            <PlayerAvatar
+                                                profileIconId={player.profileIconId}
+                                                summonerLevel={player.summonerLevel}
+                                                size="lg"
+                                                className={`shadow-2xl border-2 ${player.rank === 1 ? 'border-yellow-400' : 'border-white/20'}`}
                                             />
                                         </div>
-                                    )}
 
-                                    {/* Stats Footer */}
-                                    <div className="w-full grid grid-cols-2 gap-2 pt-4 border-t border-white/5">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-[family-name:var(--font-outfit)] font-bold">Score</span>
-                                            <span className="text-lg font-[family-name:var(--font-outfit)] font-bold text-white">{player.totalScore.toFixed(0)}</span>
+                                        {/* Main Text Content */}
+                                        <div className="flex flex-col items-center gap-1 mb-6 mt-auto">
+                                            <h3 className="text-2xl font-[family-name:var(--font-outfit)] font-black text-white group-hover:text-indigo-400 transition-colors drop-shadow-lg leading-none">
+                                                {player.gameName}
+                                            </h3>
+                                            <span className="text-xs text-gray-400 font-mono tracking-widest uppercase">#{player.tagLine}</span>
+
+                                            {player.mainChampion && (
+                                                <div className="mt-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-[10px] text-indigo-300 font-bold uppercase tracking-wider">
+                                                    Main {player.mainChampion.name}
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-[family-name:var(--font-outfit)] font-bold">Win Rate</span>
-                                            <span className={`text-lg font-[family-name:var(--font-outfit)] font-bold ${parseFloat(player.winRate) >= 50 ? 'text-emerald-400' : 'text-gray-400'}`}>
-                                                {player.winRate}
-                                            </span>
+
+                                        {/* Stats Grid */}
+                                        <div className="w-full grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">PDL</span>
+                                                <span className="text-xl font-[family-name:var(--font-outfit)] font-black text-white">{player.lp}</span>
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Winrate</span>
+                                                <span className={`text-xl font-[family-name:var(--font-outfit)] font-black ${parseFloat(player.winRate) >= 50 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                    {player.winRate}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </Link>
-                        </Card>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
+
 
             {filtered.length === 0 && !loading && (
                 <div className="text-center py-20 text-gray-500">
