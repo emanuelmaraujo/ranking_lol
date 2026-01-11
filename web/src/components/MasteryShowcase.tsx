@@ -9,6 +9,11 @@ interface Mastery {
     championName: string;
     level: number;
     points: number;
+    skin?: {
+        name: string;
+        splashUrl: string;
+        loadingUrl: string;
+    };
 }
 
 export function MasteryShowcase({ masteries, theme }: { masteries: Mastery[], theme: TierTheme }) {
@@ -36,28 +41,37 @@ export function MasteryShowcase({ masteries, theme }: { masteries: Mastery[], th
             </div>
 
             {/* Top 3 Showcase - Visual Horizontal Cards */}
-            <div className="grid grid-cols-3 gap-1 p-1 h-48">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-1 p-1 h-auto md:h-48">
                 {top3.map((m, i) => (
-                    <div key={m.championId} className="relative group overflow-hidden rounded-lg cursor-default">
+                    <div key={m.championId} className="relative group overflow-hidden rounded-lg cursor-default h-32 md:h-auto">
                         {/* Splash Art Info */}
                         <div className="absolute inset-0 z-0">
                             <img
-                                src={`https://cdn.communitydragon.org/latest/champion/${m.championId}/splash-art/centered`}
+                                src={m.skin?.splashUrl || `https://cdn.communitydragon.org/latest/champion/${m.championId}/splash-art/centered`}
                                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-60 group-hover:opacity-80"
-                                alt={m.championName}
+                                alt={m.skin?.name || m.championName}
+                                style={{ objectPosition: 'center 20%' }}
                             />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
                         </div>
 
                         {/* Content */}
-                        <div className="absolute bottom-0 inset-x-0 p-3 z-10">
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-sm font-[family-name:var(--font-outfit)] font-black text-white uppercase tracking-wider drop-shadow-md">{m.championName}</span>
+                        <div className="absolute bottom-0 inset-x-0 p-3 z-10 flex flex-col justify-end">
+                            <div className="flex items-center justify-between mb-0.5">
+                                <span className="text-sm font-[family-name:var(--font-outfit)] font-black text-white uppercase tracking-wider drop-shadow-md opacity-90">{m.championName}</span>
                                 {i === 0 && <Star size={12} className="text-yellow-400 fill-yellow-400 animate-pulse" />}
                             </div>
-                            <div className="flex items-center gap-2 text-[10px] font-[family-name:var(--font-outfit)] font-bold text-zinc-300">
-                                <span className="bg-black/50 px-1.5 py-0.5 rounded border border-white/10 text-white">M{m.level}</span>
-                                <span className={theme.colors.accent}>{new Intl.NumberFormat('en', { notation: 'compact' }).format(m.points)}</span>
+
+                            {/* Emphasized Stats */}
+                            <div className="flex items-end gap-2">
+                                <span className={`text-2xl leading-none font-[family-name:var(--font-outfit)] font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]`}>
+                                    {new Intl.NumberFormat('en', { notation: 'compact' }).format(m.points)}
+                                </span>
+                                <div className={`px-1.5 py-0.5 rounded ${theme.colors.accent} bg-opacity-20 border border-white/20 backdrop-blur-sm mb-0.5`}>
+                                    <span className={`text-[10px] font-bold ${theme.colors.accent} uppercase tracking-wider`}>
+                                        M{m.level}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>

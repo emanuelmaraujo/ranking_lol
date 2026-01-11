@@ -38,6 +38,7 @@ export function PlayerAvatar({ profileIconId, summonerLevel, className, size = '
             <img
                 src={iconUrl}
                 alt="Avatar"
+                loading="lazy"
                 onError={(e) => {
                     e.currentTarget.src = "https://ddragon.leagueoflegends.com/cdn/16.1.1/img/profileicon/29.png";
                 }}

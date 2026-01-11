@@ -69,6 +69,11 @@ export interface PlayerHistory {
         championName: string;
         level: number;
         points: number;
+        skin?: {
+            name: string;
+            splashUrl: string;
+            loadingUrl: string;
+        };
     }[];
 }
 

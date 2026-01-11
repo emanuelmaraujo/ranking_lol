@@ -274,6 +274,21 @@ export class RankingService {
         // Use the LAST snapshot as the current state for this queue
         const currentSnapshot = history.length > 0 ? history[history.length - 1] : null;
 
+        const masteries = await Promise.all((player as any).masteries?.map(async (m: any, index: number) => {
+            let skin = null;
+            // Fetch skin only for Top 3 to save resources/time (Visual Showcase)
+            if (index < 3 && this.riotService) {
+                skin = await this.riotService.getRandomSkin(m.championName);
+            }
+            return {
+                championId: m.championId,
+                championName: m.championName,
+                level: m.championLevel,
+                points: m.championPoints,
+                skin
+            };
+        }) || []);
+
         return {
             player: {
                 displayName: `${player.gameName} #${player.tagLine}`,
@@ -291,12 +306,7 @@ export class RankingService {
                 rank: h.rank,
                 lp: h.lp
             })),
-            masteries: (player as any).masteries?.map((m: any) => ({
-                championId: m.championId,
-                championName: m.championName,
-                level: m.championLevel,
-                points: m.championPoints
-            })) || []
+            masteries
         };
     }
 

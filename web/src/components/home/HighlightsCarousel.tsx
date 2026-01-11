@@ -359,7 +359,43 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [] }: Highli
         setCards(list.filter(c => c.player && c.player.gameName));
     }, [fame, shame, trends, ranking]);
 
-    if (cards.length === 0) return null;
+    // Auto-Scroll Logic
+    const [isPaused, setIsPaused] = useState(false);
+    const x = useRef(0);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const animationFrameId = useRef<number | null>(null);
+
+    useEffect(() => {
+        const scroll = () => {
+            if (isPaused || !containerRef.current) return;
+
+            x.current -= 0.5; // Speed: 0.5px per frame
+
+            // Loop Logic: If we scrolled past the first set of cards, reset to 0
+            // Width of 1 card (320px) + gap (24px) = 344px
+            const singleSetWidth = cards.length * 344;
+
+            if (Math.abs(x.current) >= singleSetWidth) {
+                x.current = 0;
+            }
+
+            if (containerRef.current) {
+                containerRef.current.style.transform = `translateX(${x.current}px)`;
+            }
+
+            animationFrameId.current = requestAnimationFrame(scroll);
+        };
+
+        if (cards.length > 0) { // SAFETY: Only run animation if we have cards
+            animationFrameId.current = requestAnimationFrame(scroll);
+        }
+
+        return () => {
+            if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
+        };
+    }, [isPaused, cards.length]);
+
+
 
     // INFINITE SCROLL SIMULATION: Duplicate cards X times
     const infiniteCards = Array(GENERATED_STORY_COUNT).fill(cards).flat();
@@ -374,21 +410,21 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [] }: Highli
             </div>
 
             {/* Drag Container */}
-            <motion.div
-                ref={carouselRef}
-                className="cursor-grab active:cursor-grabbing overflow-visible ml-[-5%]" // Negative margin to center start feels better
-                whileTap={{ cursor: "grabbing" }}
+            <div
+                className="overflow-hidden ml-[-5%]"
+                onMouseEnter={() => setIsPaused(true)}
+                onMouseLeave={() => setIsPaused(false)}
             >
-                <motion.div
-                    drag="x"
-                    dragConstraints={{ right: 0, left: -((width * GENERATED_STORY_COUNT) + 500) }} // Approx constraints
-                    className="flex gap-6 w-max px-8 pb-12"
+                <div
+                    ref={containerRef}
+                    className="flex gap-6 w-max px-8 py-12 cursor-grab active:cursor-grabbing"
+                    style={{ willChange: 'transform', backfaceVisibility: 'hidden' }} // Optimization: Promote to layer
                 >
                     {infiniteCards.map((card, idx) => (
                         <StoryCardComponent key={`${card.id}-${idx}`} card={card} />
                     ))}
-                </motion.div>
-            </motion.div>
+                </div>
+            </div>
         </section>
     );
 }

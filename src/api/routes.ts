@@ -158,17 +158,32 @@ export async function rankingRoutes(fastify: FastifyInstance) {
         try {
             // 1. Add Players
             const result = await rankingService.bulkAddPlayers(players);
+            const addedCount = result.success.length;
 
-            // 2. Fast Sync (Await for essential data like Icons, Mastery, Ranks)
-            // This ensures the dashboard has data immediately after the modal closes.
-            await syncService.runFastSync();
+            if (addedCount === 0 && result.failed.length > 0) {
+                return reply.status(400).send({ error: 'Failed to find players', details: result });
+            }
+
+            // 2. Fast Sync (Safeguarded)
+            // Even if this times out or fails, we should report success for adding players
+            let syncWarning = undefined;
+            try {
+                if (addedCount > 0) {
+                    console.log(`[API] Starting Fast Sync for ${addedCount} new players...`);
+                    await syncService.runFastSync();
+                }
+            } catch (err: any) {
+                console.warn('[API] Fast Sync Warning:', err.message);
+                syncWarning = 'Players added, but initial data sync timed out. It will complete in the background.';
+            }
 
             // 3. Trigger Background Ingest (Heavy lifting: Match History, Calc)
             syncService.runBackgroundIngest().catch(err => console.error('Background Ingest Error:', err));
 
             return {
                 ...result,
-                message: 'Players added and synced. Background processing started.'
+                message: 'Players added. Processing started.',
+                warning: syncWarning
             };
         } catch (error) {
             console.error(error);

@@ -11,12 +11,20 @@ export class RiotService {
     constructor(apiKey: string) {
         this.apiKey = apiKey;
 
-        // Safe Rate Limiting (Align with 100 requests every 2 minutes)
-        // 100 reqs / 120 sec = 0.83 reqs/sec => 1 req every 1200ms.
-        // We use 12500ms to be safe.
+        // Rate Limiter Strategy (Burst Friendly)
+        // Riot Dev Key Limits: 
+        // 1. 20 requests every 1 second
+        // 2. 100 requests every 2 minutes
+        //
+        // Configuration:
+        // - Burst: Allow fast execution (minTime 50ms = 20 req/s)
+        // - Long Term: Cap at ~90 requests every 2 minutes via Reservoir to be safe.
         this.limiter = new Bottleneck({
-            minTime: 1250, // 1 request every 1.25 seconds (Guarantees < 100/2min)
-            maxConcurrent: 1, // Strict Sequential
+            minTime: 50,               // Cap at 20 req/s (Short term limit)
+            maxConcurrent: 5,          // Allow some concurrency
+            reservoir: 90,             // Start with 90 tokens (Safe buffer under 100)
+            reservoirRefreshAmount: 90,
+            reservoirRefreshInterval: 120 * 1000 // Refill every 2 minutes
         });
 
         // Retry Strategy for 429

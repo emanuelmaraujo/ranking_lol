@@ -21,15 +21,14 @@ export function RankingTable({ data }: { data: RankingEntry[] }) {
         hidden: { opacity: 0 },
         show: {
             opacity: 1,
-            transition: {
-                staggerChildren: 0.05
-            }
+            transition: { duration: 0.3 }
         }
     };
 
+    // removed complex staggered item variants for performance
     const item = {
-        hidden: { opacity: 0, y: 10 },
-        show: { opacity: 1, y: 0 }
+        hidden: { opacity: 0 },
+        show: { opacity: 1 }
     };
 
     return (
