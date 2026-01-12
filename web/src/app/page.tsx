@@ -23,6 +23,7 @@ import { WeeklySpotlight } from '@/components/home/WeeklySpotlight';
 import { HighlightsCarousel } from '@/components/home/HighlightsCarousel';
 import { WeeklyTrends } from '@/components/home/WeeklyTrends'; // Re-introduced
 import { Ticker } from '@/components/home/Ticker';
+import { getDateRange } from '@/lib/date-utils';
 
 type HomeData = {
   ranking: RankingEntry[];
@@ -58,10 +59,10 @@ export default function Home() {
 
         const [rankingRes, highlightsRes, trendsRes, fameRes, shameRes] = await Promise.allSettled([
           getSeasonRanking(currentQueue, 5),
-          getHighlights(currentQueue, 'WEEKLY'),
+          getHighlights(currentQueue, getDateRange('WEEKLY')),
           getPdlGainRanking(currentQueue, 50),
-          getHallOfFame(currentQueue, 'WEEKLY'),
-          getHallOfShame(currentQueue, 'WEEKLY')
+          getHallOfFame(currentQueue, getDateRange('WEEKLY')),
+          getHallOfShame(currentQueue, getDateRange('WEEKLY'))
         ]);
 
         // FETCH SECONDARY DATA for Ticker (The OTHER queue)

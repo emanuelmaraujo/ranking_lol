@@ -43,9 +43,9 @@ async function checkBootstrap() {
             // 2. Sync Ranks (Get initial Tier/LP)
             await runJob('sync-ranks', async () => await runSyncRanks());
 
-            // 3. Ingest Batch (Limited to 25 matches for speed/safety)
+            // 3. Ingest Batch (Bootstrap: 50 matches per queue)
             await runJob('ingest-batch', async () => {
-                process.env.MATCH_LIMIT = '25';
+                process.env.MATCH_LIMIT = '50';
                 try {
                     await runIngestBatch();
                 } finally {
@@ -105,11 +105,38 @@ async function startScheduler() {
                 isJobRunning = true;
                 console.log('🔄 [SCHEDULER] Starting Update Cycle...');
 
+                // Dynamic Match Limit Logic
+                let matchLimit = 2; // Default: Routine update
+
+                // Check Last Update Time
+                const state = await prisma.systemState.findUnique({ where: { key: 'LAST_UPDATE' } });
+                if (state?.value) {
+                    const lastUpdate = new Date(state.value);
+                    const diffMs = Date.now() - lastUpdate.getTime();
+                    const diffHours = diffMs / (1000 * 60 * 60);
+
+                    if (diffHours >= 1) {
+                        console.log(`⚠️ Last update was ${diffHours.toFixed(1)}h ago. Increasing lookback to 10 matches.`);
+                        matchLimit = 10;
+                    }
+                } else {
+                    // Should be covered by Bootstrap, but fallback safety
+                    matchLimit = 10;
+                }
+
+                console.log(`🎯 Target Match Limit: ${matchLimit}`);
+
                 // Serial Execution
-                // User Request: Fetch Icons/Level (Sync-Players) + Ranks (Sync-Ranks) every 30m
                 await runJob('sync-players', async () => await runSyncPlayers());
                 await runJob('sync-ranks', async () => await runSyncRanks());
-                await runJob('ingest-batch', async () => await runIngestBatch());
+                await runJob('ingest-batch', async () => {
+                    process.env.MATCH_LIMIT = matchLimit.toString();
+                    try {
+                        await runIngestBatch();
+                    } finally {
+                        delete process.env.MATCH_LIMIT;
+                    }
+                });
 
                 // Track Last Update ONLY on Success
                 await prisma.systemState.upsert({
@@ -130,8 +157,8 @@ async function startScheduler() {
             isJobRunning = false;
 
             // Schedule next run
-            // User requested: 30 minutes interval
-            const delayMinutes = 30;
+            // User requested: 5 minutes interval
+            const delayMinutes = 5;
             const nextRun = new Date(Date.now() + delayMinutes * 60 * 1000);
 
             console.log(`⏳ [SCHEDULER] Next Update Cycle in ${delayMinutes} minutes (${nextRun.toLocaleTimeString()})`);

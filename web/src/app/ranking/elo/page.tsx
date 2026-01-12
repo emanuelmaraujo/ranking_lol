@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { getSeasonRanking, RankingEntry, getHighlights, getPdlGainRanking } from "@/lib/api";
+import { getDateRange } from "@/lib/date-utils";
 // import { RankingTable } from "@/components/RankingTable";
 import { Card } from "@/components/ui/Card";
 import { ProfileImage } from "@/components/ui/ProfileImage";
 import {
-    Trophy, Medal, Crown, Swords, TreeDeciduous, Zap, Crosshair, Shield, Globe, Layers
+    Trophy, Medal, Crown, Swords, TreeDeciduous, Zap, Crosshair, Shield, Globe, Layers, Calendar
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQueue } from "@/contexts/QueueContext";
@@ -42,6 +43,12 @@ const MODES = [
     { id: "LANE", label: "Por Rota", icon: Swords }, // Or another icon representing specialization
 ];
 
+const PERIODS = [
+    { id: "GENERAL", label: "Geral" },
+    { id: "MONTHLY", label: "Mensal" },
+    { id: "WEEKLY", label: "Semanal" },
+];
+
 // Helper to calculate raw Elo value for sorting
 const getEloValue = (p: RankingEntry) => {
     const tierScores: Record<string, number> = {
@@ -53,6 +60,8 @@ const getEloValue = (p: RankingEntry) => {
     return (tierScores[p.tier] || 0) + (rankScores[p.rankDivision] || 0) + p.lp;
 };
 
+
+
 export default function RankingPage() {
     const { queueType } = useQueue();
 
@@ -62,6 +71,7 @@ export default function RankingPage() {
 
     // View Config
     const [viewMode, setViewMode] = useState<"TIER" | "GLOBAL" | "LANE">("TIER");
+    const [period, setPeriod] = useState<"GENERAL" | "MONTHLY" | "WEEKLY">("GENERAL");
 
     // Filters
     const [activeTier, setActiveTier] = useState("ALL");
@@ -76,9 +86,10 @@ export default function RankingPage() {
         setLoading(true);
         const fetchData = async () => {
             try {
+                const filters = getDateRange(period);
                 const [rankData, hlData, gainData] = await Promise.all([
-                    getSeasonRanking(queueType),
-                    getHighlights(queueType), // Uses API
+                    getSeasonRanking(queueType, 100, filters),
+                    getHighlights(queueType, filters),
                     getPdlGainRanking(queueType, 5, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
                 ]);
                 setPlayers(rankData);
@@ -89,7 +100,7 @@ export default function RankingPage() {
             }
         };
         fetchData();
-    }, [queueType]);
+    }, [queueType, period]);
 
     // --- Logic: Memoized Sorting & Filtering ---
     const topData = useMemo(() => {
@@ -115,7 +126,19 @@ export default function RankingPage() {
             processed.sort((a, b) => getEloValue(b) - getEloValue(a));
         }
 
-        return processed;
+        return processed.map(p => {
+            // If in Lane Mode, override generic stats with Lane Stats
+            if (viewMode === 'LANE' && activeLane !== 'ALL' && p.laneStats?.[activeLane]) {
+                console.log('DEBUG LANE OVERRIDE', p.gameName, activeLane, p.laneStats[activeLane]);
+                return {
+                    ...p,
+                    gamesUsed: p.laneStats[activeLane].games,
+                    wins: p.laneStats[activeLane].wins,
+                    losses: p.laneStats[activeLane].games - p.laneStats[activeLane].wins
+                };
+            }
+            return p;
+        });
     }, [players, viewMode, activeTier, activeLane]);
 
     const topPlayer = topData.length > 0 ? topData[0] : null;
@@ -140,6 +163,25 @@ export default function RankingPage() {
                         {viewMode === "GLOBAL" && "Os maiores pontuadores do RiftScore geral."}
                         {viewMode === "LANE" && `Os reis da rota ${LANES.find(l => l.id === activeLane)?.label}.`}
                     </p>
+
+                    {/* Date Filters */}
+                    <div className="flex items-center gap-2 mt-4">
+                        <Calendar className="w-4 h-4 text-zinc-500" />
+                        <div className="flex gap-1 bg-white/5 p-1 rounded-lg">
+                            {PERIODS.map((p) => (
+                                <button
+                                    key={p.id}
+                                    onClick={() => setPeriod(p.id as any)}
+                                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${period === p.id
+                                        ? "bg-emerald-600 text-white shadow-lg"
+                                        : "text-zinc-500 hover:text-white hover:bg-white/5"
+                                        }`}
+                                >
+                                    {p.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                 </div>
 
                 {/* Mode Tabs (Premium Look) */}
@@ -407,7 +449,8 @@ export default function RankingPage() {
                             <div className="col-span-1 text-center">#</div>
                             <div className="col-span-4 md:col-span-3 lg:col-span-3">Jogador</div>
                             <div className="col-span-3 md:col-span-2 lg:col-span-2">Elo</div>
-                            <div className="col-span-4 md:col-span-6 lg:col-span-6 text-right pr-4">
+                            <div className="col-span-2 md:col-span-2 text-center">Partidas</div>
+                            <div className="col-span-2 md:col-span-4 lg:col-span-4 text-right pr-4">
                                 {viewMode === "LANE" ? "Pontuação da Rota" : "Pontuação Global"}
                             </div>
                         </div>
@@ -465,7 +508,13 @@ export default function RankingPage() {
                                     </div>
 
                                     {/* Score Info (Dynamic) */}
-                                    <div className="col-span-4 md:col-span-6 lg:col-span-6 text-right pr-4">
+                                    <div className="col-span-2 md:col-span-2 text-center flex justify-center items-center">
+                                        <div className="px-3 py-1 rounded bg-white/5 border border-white/5 text-xs font-bold text-zinc-400">
+                                            {player.gamesUsed}
+                                        </div>
+                                    </div>
+
+                                    <div className="col-span-2 md:col-span-4 lg:col-span-4 text-right pr-4">
                                         <div className="flex flex-col items-end">
                                             <span className="text-xl font-black text-white group-hover:scale-110 transition-transform bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-emerald-200">
                                                 {viewMode === "LANE"

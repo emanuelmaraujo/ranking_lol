@@ -111,6 +111,7 @@ export function RankingTable({ data }: { data: RankingEntry[] }) {
                                 <th className="p-4 text-center">Elo</th>
                                 <th className="p-4 text-right">Pontos</th>
                                 <th className="p-4 text-center">Winrate</th>
+                                <th className="p-4 text-center">Partidas</th>
                                 <th className="p-4 text-right hidden md:table-cell">Média</th>
                             </tr>
                         </thead>
@@ -174,10 +175,12 @@ export function RankingTable({ data }: { data: RankingEntry[] }) {
                                                 }`}>
                                                 {player.winRate}
                                             </span>
-                                            <span className="text-xs text-gray-500 ml-2 border-l border-white/10 pl-2">
-                                                {player.gamesUsed}J
-                                            </span>
                                         </div>
+                                    </td>
+
+                                    {/* Games Played */}
+                                    <td className="p-4 text-center font-bold text-zinc-400">
+                                        {player.gamesUsed}
                                     </td>
 
                                     {/* Avg Score */}

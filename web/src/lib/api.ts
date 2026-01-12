@@ -34,6 +34,7 @@ export interface RankingEntry {
     };
     // New: Lane Scores
     laneScores: Record<string, number>;
+    laneStats?: Record<string, { games: number, wins: number }>;
     skin?: {
         name: string;
         splashUrl: string;
@@ -151,14 +152,23 @@ export interface PlayerInsights {
     };
 }
 
-export async function getSeasonRanking(queue: 'SOLO' | 'FLEX' = 'SOLO', limit: number = 100): Promise<RankingEntry[]> {
-    const res = await fetch(`${API_URL}/ranking/season?queue=${queue}&limit=${limit}&_t=${Date.now()}`, { cache: 'no-store' });
+export async function getSeasonRanking(queue: 'SOLO' | 'FLEX' = 'SOLO', limit: number = 100, filters?: { start?: Date; end?: Date }): Promise<RankingEntry[]> {
+    let url = `${API_URL}/ranking/season?queue=${queue}&limit=${limit}`;
+    if (filters?.start) url += `&startDate=${filters.start.toISOString()}`;
+    if (filters?.end) url += `&endDate=${filters.end.toISOString()}`;
+    url += `&_t=${Date.now()}`;
+
+    const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error('Failed to fetch ranking');
     return res.json();
 }
 
-export async function getRankingByElo(queue: 'SOLO' | 'FLEX', tier: string, limit: number = 100): Promise<EloRanking> {
-    const res = await fetch(`${API_URL}/ranking/season/by-elo?queue=${queue}&tier=${tier}&limit=${limit}`);
+export async function getRankingByElo(queue: 'SOLO' | 'FLEX', tier: string, limit: number = 100, filters?: { start?: Date; end?: Date }): Promise<EloRanking> {
+    let url = `${API_URL}/ranking/season/by-elo?queue=${queue}&tier=${tier}&limit=${limit}`;
+    if (filters?.start) url += `&startDate=${filters.start.toISOString()}`;
+    if (filters?.end) url += `&endDate=${filters.end.toISOString()}`;
+
+    const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to fetch elo ranking');
     return res.json();
 }
@@ -217,8 +227,12 @@ export async function getPlayerInsights(puuid: string, queue: 'SOLO' | 'FLEX' = 
     return res.json();
 }
 
-export const getHighlights = async (queue: 'SOLO' | 'FLEX' = 'SOLO', period: "WEEKLY" | "MONTHLY" | "GENERAL" = "WEEKLY"): Promise<PeriodHighlights> => {
-    const res = await fetch(`${API_URL}/ranking/insights?queue=${queue}&period=${period}`, { cache: 'no-store' });
+export const getHighlights = async (queue: 'SOLO' | 'FLEX' = 'SOLO', filters?: { start?: Date; end?: Date }): Promise<PeriodHighlights> => {
+    let url = `${API_URL}/ranking/insights?queue=${queue}`;
+    if (filters?.start) url += `&startDate=${filters.start.toISOString()}`;
+    if (filters?.end) url += `&endDate=${filters.end.toISOString()}`;
+
+    const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error("Failed to fetch highlights");
     return res.json();
 };
@@ -326,8 +340,15 @@ export interface HallOfShameData {
 /**
  * Get Hall of Fame
  */
-export async function getHallOfFame(queue: 'SOLO' | 'FLEX' = 'SOLO', period: 'WEEKLY' | 'MONTHLY' | 'GENERAL' = 'GENERAL'): Promise<HallOfFameData> {
-    const res = await fetch(`${API_URL}/insights/fame?queue=${queue}&period=${period}`, { cache: 'no-store' });
+/**
+ * Get Hall of Fame
+ */
+export async function getHallOfFame(queue: 'SOLO' | 'FLEX' = 'SOLO', filters?: { start?: Date; end?: Date }): Promise<HallOfFameData> {
+    let url = `${API_URL}/insights/fame?queue=${queue}`;
+    if (filters?.start) url += `&startDate=${filters.start.toISOString()}`;
+    if (filters?.end) url += `&endDate=${filters.end.toISOString()}`;
+
+    const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error('Failed to fetch Hall of Fame');
     return res.json();
 }
@@ -335,8 +356,15 @@ export async function getHallOfFame(queue: 'SOLO' | 'FLEX' = 'SOLO', period: 'WE
 /**
  * Get Hall of Shame
  */
-export async function getHallOfShame(queue: 'SOLO' | 'FLEX' = 'SOLO', period: 'WEEKLY' | 'MONTHLY' | 'GENERAL' = 'GENERAL'): Promise<HallOfShameData> {
-    const res = await fetch(`${API_URL}/insights/shame?queue=${queue}&period=${period}`, { cache: 'no-store' });
+/**
+ * Get Hall of Shame
+ */
+export async function getHallOfShame(queue: 'SOLO' | 'FLEX' = 'SOLO', filters?: { start?: Date; end?: Date }): Promise<HallOfShameData> {
+    let url = `${API_URL}/insights/shame?queue=${queue}`;
+    if (filters?.start) url += `&startDate=${filters.start.toISOString()}`;
+    if (filters?.end) url += `&endDate=${filters.end.toISOString()}`;
+
+    const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error('Failed to fetch Hall of Shame');
     return res.json();
 }

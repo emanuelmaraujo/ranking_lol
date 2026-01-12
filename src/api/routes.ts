@@ -12,9 +12,9 @@ const syncService = new SyncService(); // Added
 export async function rankingRoutes(fastify: FastifyInstance) {
 
     // 1. Ranking General
-    interface RankingQuery { queue?: string; limit?: number; }
+    interface RankingQuery { queue?: string; limit?: number; startDate?: string; endDate?: string; }
     fastify.get<{ Querystring: RankingQuery }>('/api/ranking/season', async (request, reply) => {
-        const { queue = 'SOLO', limit = 100 } = request.query;
+        const { queue = 'SOLO', limit = 100, startDate, endDate } = request.query;
 
         // Force No Cache
         reply.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -25,8 +25,10 @@ export async function rankingRoutes(fastify: FastifyInstance) {
         const l = Number(limit) || 100;
 
         try {
-            const data = await rankingService.getSeasonRanking(q, l);
-            console.log(`[API] /ranking/season - ${data.length} records`);
+            const start = startDate ? new Date(startDate) : undefined;
+            const end = endDate ? new Date(endDate) : undefined;
+            const data = await rankingService.getSeasonRanking(q, l, start, end);
+            console.log(`[API] /ranking/season - ${data.length} records (Start: ${startDate}, End: ${endDate})`);
             return data;
         } catch (error) {
             console.error(error);
@@ -35,14 +37,16 @@ export async function rankingRoutes(fastify: FastifyInstance) {
     });
 
     // 2. Ranking By Elo
-    interface EloQuery { queue?: string; tier?: string; limit?: number; }
+    interface EloQuery { queue?: string; tier?: string; limit?: number; startDate?: string; endDate?: string; }
     fastify.get<{ Querystring: EloQuery }>('/api/ranking/season/by-elo', async (request, reply) => {
-        const { queue = 'SOLO', tier = 'ALL', limit = 100 } = request.query;
+        const { queue = 'SOLO', tier = 'ALL', limit = 100, startDate, endDate } = request.query;
         const q = queue === 'FLEX' ? 'FLEX' : 'SOLO';
         const l = Number(limit) || 100;
 
         try {
-            const data = await rankingService.getRankingByElo(q, tier, l);
+            const start = startDate ? new Date(startDate) : undefined;
+            const end = endDate ? new Date(endDate) : undefined;
+            const data = await rankingService.getRankingByElo(q, tier, l, start, end);
             return data;
         } catch (error) {
             console.error(error);
@@ -87,14 +91,15 @@ export async function rankingRoutes(fastify: FastifyInstance) {
     });
 
     // 6. Highlights (Weekly/Monthly)
-    interface HighlightsQuery { queue?: string; period?: string; }
+    interface HighlightsQuery { queue?: string; startDate?: string; endDate?: string; }
     fastify.get<{ Querystring: HighlightsQuery }>('/api/ranking/insights', async (request, reply) => {
-        const { queue = 'SOLO', period = 'WEEKLY' } = request.query;
+        const { queue = 'SOLO', startDate, endDate } = request.query;
         const q = queue === 'FLEX' ? 'FLEX' : 'SOLO';
-        const p = period === 'MONTHLY' ? 'MONTHLY' : 'WEEKLY';
 
         try {
-            const data = await rankingService.getHighlights(q, p);
+            const start = startDate ? new Date(startDate) : undefined;
+            const end = endDate ? new Date(endDate) : undefined;
+            const data = await rankingService.getHighlights(q, start, end);
             return data;
         } catch (error) {
             console.error(error);
@@ -258,14 +263,15 @@ export async function rankingRoutes(fastify: FastifyInstance) {
     });
 
     // 9. Insights (Hall of Fame & Shame)
-    interface InsightsQueryShort { queue?: string; period?: string; }
+    interface InsightsQueryShort { queue?: string; startDate?: string; endDate?: string; }
 
     fastify.get<{ Querystring: InsightsQueryShort }>('/api/insights/fame', async (request, reply) => {
-        const { queue = 'SOLO', period = 'GENERAL' } = request.query;
+        const { queue = 'SOLO', startDate, endDate } = request.query;
         const q = queue === 'FLEX' ? 'FLEX' : 'SOLO';
-        const p = (period === 'WEEKLY' || period === 'MONTHLY' || period === 'GENERAL') ? period : 'GENERAL';
         try {
-            return await rankingService.getHallOfFame(q, p);
+            const start = startDate ? new Date(startDate) : undefined;
+            const end = endDate ? new Date(endDate) : undefined;
+            return await rankingService.getHallOfFame(q, start, end);
         } catch (error) {
             console.error(error);
             reply.status(500).send({ error: 'Internal Server Error' });
@@ -273,11 +279,12 @@ export async function rankingRoutes(fastify: FastifyInstance) {
     });
 
     fastify.get<{ Querystring: InsightsQueryShort }>('/api/insights/shame', async (request, reply) => {
-        const { queue = 'SOLO', period = 'GENERAL' } = request.query;
+        const { queue = 'SOLO', startDate, endDate } = request.query;
         const q = queue === 'FLEX' ? 'FLEX' : 'SOLO';
-        const p = (period === 'WEEKLY' || period === 'MONTHLY' || period === 'GENERAL') ? period : 'GENERAL';
         try {
-            return await rankingService.getHallOfShame(q, p);
+            const start = startDate ? new Date(startDate) : undefined;
+            const end = endDate ? new Date(endDate) : undefined;
+            return await rankingService.getHallOfShame(q, start, end);
         } catch (error) {
             console.error(error);
             reply.status(500).send({ error: 'Internal Server Error' });

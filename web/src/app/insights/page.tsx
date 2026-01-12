@@ -6,6 +6,7 @@ import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { Card } from "@/components/ui/Card";
 import { Trophy, Skull, Flame, TrendingUp, Swords, Calendar, Eye, Timer, Target, Layers, User, Crown, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
+import { getDateRange } from "@/lib/date-utils";
 
 import { useQueue } from "@/contexts/QueueContext";
 
@@ -22,9 +23,9 @@ export default function InsightsPage() {
             setLoading(true);
             try {
                 const [res, fameRes, shameRes] = await Promise.all([
-                    getHighlights(queueType, period),
-                    getHallOfFame(queueType, period),
-                    getHallOfShame(queueType, period)
+                    getHighlights(queueType, getDateRange(period)),
+                    getHallOfFame(queueType, getDateRange(period)),
+                    getHallOfShame(queueType, getDateRange(period))
                 ]);
                 setData(res);
                 setFame(fameRes);

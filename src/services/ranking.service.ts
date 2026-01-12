@@ -28,16 +28,14 @@ export interface RankingEntry {
         points: number;
         level: number;
     };
-    // New: Lane Scores
     laneScores: Record<string, number>;
-    // New: Skin for Hero
+    laneStats?: Record<string, { games: number, wins: number }>;
     skin?: {
         name: string;
         splashUrl: string;
         loadingUrl: string;
     };
 }
-
 export class RankingService {
     private riotService?: RiotService;
 
@@ -46,11 +44,33 @@ export class RankingService {
     }
 
     /**
+     * Helper to get Start Date for a given period
+     * Enforces Monday-Sunday logic for Weekly
+     */
+    public getStartDateForPeriod(period: 'WEEKLY' | 'MONTHLY' | 'GENERAL'): Date {
+        const now = new Date();
+        const startDate = new Date();
+        startDate.setHours(0, 0, 0, 0);
+
+        if (period === 'WEEKLY') {
+            const day = now.getDay();
+            const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Monday
+            startDate.setDate(diff);
+        } else if (period === 'MONTHLY') {
+            startDate.setDate(1); // 1st of month
+        } else {
+            // General / Season
+            return new Date('2026-01-01'); // Season Start
+        }
+        return startDate;
+    }
+
+    /**
      * Get General Season Ranking
      * Aggregates MatchScores for all active players in a specific queue.
      * CRITICAL: Uses RankSnapshot for Tier/Rank, NOT Player model.
      */
-    async getSeasonRanking(queueType: 'SOLO' | 'FLEX' = 'SOLO', limit: number = 100): Promise<RankingEntry[]> {
+    async getSeasonRanking(queueType: 'SOLO' | 'FLEX' = 'SOLO', limit: number = 100, startDate?: Date, endDate?: Date): Promise<RankingEntry[]> {
         // 1. Get Active Players (Include Masteries)
         const players = await prisma.player.findMany({
             where: { isActive: true },
@@ -73,12 +93,27 @@ export class RankingService {
                 orderBy: { createdAt: 'desc' }
             });
 
-            const scores = await prisma.matchScore.findMany({
+            const scoresRaw = await prisma.matchScore.findMany({
                 where: {
                     playerId: player.puuid,
                     queueType: queueType
-                } as any
+                },
+                include: { match: { select: { gameCreation: true } } }
             });
+
+            const scores = scoresRaw.filter(s => {
+                if (!s.match?.gameCreation) return false;
+                const d = new Date(s.match.gameCreation);
+                if (startDate && d < startDate) return false;
+                if (endDate && d > endDate) return false;
+                return true;
+            });
+
+            if (startDate && scores.length > 0) {
+                const first = (scores[0] as any).match.gameCreation;
+                const last = (scores[scores.length - 1] as any).match.gameCreation;
+                console.log(`[DEBUG] ${player.gameName}: Found ${scores.length} scores. Range: ${first} - ${last} | Filter: ${startDate.toISOString()}`);
+            }
 
             // If no games and no rank, skip (unless we want to show all players in /players? Logic might differ)
             // For RANKING, we skip. For /players directory, we might want them.
@@ -90,9 +125,16 @@ export class RankingService {
             const wins = scores.filter(s => s.isVictory).length;
             const losses = scores.length - wins;
 
-            // Calculate Lane Scores
+            // Calculate Lane Scores & Stats
             const laneScores: Record<string, number> = {
                 TOP: 0, JUNGLE: 0, MID: 0, BOT: 0, SUPPORT: 0
+            };
+            const laneStats: Record<string, { games: number, wins: number }> = {
+                TOP: { games: 0, wins: 0 },
+                JUNGLE: { games: 0, wins: 0 },
+                MID: { games: 0, wins: 0 },
+                BOT: { games: 0, wins: 0 },
+                SUPPORT: { games: 0, wins: 0 }
             };
 
             scores.forEach(s => {
@@ -105,6 +147,8 @@ export class RankingService {
                 // Accumulate if valid lane
                 if (laneScores[lane] !== undefined) {
                     laneScores[lane] += s.matchScore;
+                    laneStats[lane].games += 1;
+                    if (s.isVictory) laneStats[lane].wins += 1;
                 }
             });
 
@@ -133,7 +177,8 @@ export class RankingService {
                 losses,
                 winRate: scores.length > 0 ? ((wins / scores.length) * 100).toFixed(1) + '%' : '0%',
                 mainChampion: mainChamp,
-                laneScores
+                laneScores,
+                laneStats
             });
         }
 
@@ -158,6 +203,10 @@ export class RankingService {
             }));
         }
 
+        if (results.length > 0) {
+            console.log('[DEBUG] First Result LaneStats:', JSON.stringify((results[0] as any).laneStats));
+        }
+
         return results;
     }
 
@@ -165,12 +214,12 @@ export class RankingService {
      * Get Ranking Filtered by Tier
      * CRITICAL: Uses RankSnapshot for Tier source.
      */
-    async getRankingByElo(queueType: 'SOLO' | 'FLEX', tierFilter: string, limit: number = 100) {
+    async getRankingByElo(queueType: 'SOLO' | 'FLEX', tierFilter: string, limit: number = 100, startDate?: Date, endDate?: Date) {
         // Reuse getSeasonRanking logic because filtering *after* snapshot lookup is safer 
         // than complex join queries given current prisma schema.
         // It's not most efficient for 1M players but strictly correct for small scale.
 
-        const fullRanking = await this.getSeasonRanking(queueType, 1000); // Get all relevant
+        const fullRanking = await this.getSeasonRanking(queueType, 1000, startDate, endDate); // Get all relevant
 
         let filtered = fullRanking;
         if (tierFilter !== 'ALL') {
@@ -399,11 +448,7 @@ export class RankingService {
         });
 
         // --- Weekly Report Calculation ---
-        const now = new Date();
-        const day = now.getDay();
-        const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Monday
-        const startOfWeek = new Date(now.setDate(diff));
-        startOfWeek.setHours(0, 0, 0, 0);
+        const startOfWeek = this.getStartDateForPeriod('WEEKLY');
 
         // Weekly Matches
         const weeklyMatchesState = await prisma.matchScore.groupBy({
@@ -510,35 +555,29 @@ export class RankingService {
      * Get Highlights (Weekly or Monthly)
      * Returns: Top KDA, Most Games, Best Support, Highest Dmg, Survivor
      */
-    async getHighlights(queueType: 'SOLO' | 'FLEX' = 'SOLO', period: 'WEEKLY' | 'MONTHLY' | 'GENERAL' = 'WEEKLY') {
-        const now = new Date();
-        now.setHours(23, 59, 59, 999);
+    async getHighlights(queueType: 'SOLO' | 'FLEX' = 'SOLO', startDate?: Date, endDate?: Date) {
+        // Default to season start if no start provided
+        const finalStartDate = startDate || new Date('2026-01-01');
+        // Default to now if no end provided
+        const finalEndDate = endDate || new Date();
 
-        let startDate = new Date();
-        startDate.setHours(0, 0, 0, 0);
+        let periodLabel = 'Personalizado';
+        // Auto-labeling could be done here based on diff, but frontend usually handles labels better or we pass it in.
+        // For now, simple label.
+        if (!startDate) periodLabel = 'Geral (Season)';
 
-        let periodLabel = '';
         let stomper: any = null;
-
-        if (period === 'WEEKLY') {
-            const day = now.getDay();
-            const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Monday
-            startDate.setDate(diff);
-            periodLabel = `Semana de ${startDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`;
-        } else if (period === 'MONTHLY') {
-            startDate.setDate(1); // 1st of month
-            periodLabel = `Mês de ${startDate.toLocaleDateString('pt-BR', { month: 'long' })}`;
-        } else {
-            // General / Season
-            startDate = new Date('2026-01-01'); // Season Start
-            periodLabel = 'Geral (Temporada)';
-        }
 
         // 1. Fetch all scores for this period
         const scores = await prisma.matchScore.findMany({
             where: {
                 queueType: queueType,
-                createdAt: { gte: startDate }
+                match: {
+                    gameCreation: {
+                        gte: finalStartDate,
+                        lte: finalEndDate
+                    }
+                }
             } as any,
             include: { player: true, match: true }
         });
@@ -608,7 +647,11 @@ export class RankingService {
         });
 
         const statsArray = Object.values(playerStats);
-        const minGames = period === 'MONTHLY' ? 5 : (period === 'GENERAL' ? 10 : 2); // Scales with period
+
+        // Dynamic Min Games based on duration
+        const dayDiff = (finalEndDate.getTime() - finalStartDate.getTime()) / (1000 * 3600 * 24);
+        const minGames = dayDiff <= 7 ? 2 : (dayDiff <= 31 ? 5 : 10);
+
         const validStats = statsArray.filter(s => s.games >= minGames);
 
         // 3. Calculate Highlights
@@ -719,7 +762,7 @@ export class RankingService {
         }
 
         return {
-            period: { start: startDate.toISOString(), end: now.toISOString() },
+            period: { start: finalStartDate.toISOString(), end: finalEndDate.toISOString() },
             periodLabel,
 
             mvp: mvp ? { ...mvp.player, value: (mvp.totalScore / mvp.games).toFixed(1), label: 'Pontos/Jogo' } : null,
@@ -761,8 +804,8 @@ export class RankingService {
         let nextUpdate = null;
 
         if (lastUpdate) {
-            // Next update is 30 minutes after last
-            nextUpdate = new Date(lastUpdate.getTime() + 30 * 60 * 1000);
+            // Next update is 5 minutes after last
+            nextUpdate = new Date(lastUpdate.getTime() + 5 * 60 * 1000);
         }
 
         return {
@@ -878,27 +921,14 @@ export class RankingService {
      * - Stomper (Existing)
      * - Farm Machine (Existing)
      */
-    async getHallOfFame(queueType: 'SOLO' | 'FLEX' = 'SOLO', period: 'WEEKLY' | 'MONTHLY' | 'GENERAL' = 'GENERAL') {
-        const now = new Date();
-        now.setHours(23, 59, 59, 999);
-        let startDate = new Date('2024-01-01'); // Season Start Default
-
-        if (period === 'WEEKLY') {
-            const day = now.getDay();
-            const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Monday
-            startDate = new Date(now); // Clone
-            startDate.setDate(diff);
-            startDate.setHours(0, 0, 0, 0);
-        } else if (period === 'MONTHLY') {
-            startDate = new Date(now);
-            startDate.setDate(1);
-            startDate.setHours(0, 0, 0, 0);
-        }
+    async getHallOfFame(queueType: 'SOLO' | 'FLEX' = 'SOLO', startDate?: Date, endDate?: Date) {
+        const start = startDate || new Date('2024-01-01');
+        const end = endDate || new Date();
 
         const scores = await prisma.matchScore.findMany({
             where: {
                 queueType: queueType,
-                createdAt: { gte: startDate }
+                match: { gameCreation: { gte: start, lte: end } }
             } as any,
             include: { player: true, match: true }
         });
@@ -1066,37 +1096,18 @@ export class RankingService {
                 }
             }
 
-            // --- Aggregated Records ---
-            const validStats = Object.values(playerStats).filter(s => s.games >= (period === 'WEEKLY' ? 2 : 5));
-
-            // Penta King (Sum)
-            const pentaWinner = Object.values(playerStats).sort((a, b) => b.pentaCount - a.pentaCount)[0];
-            const pentaKing = (pentaWinner && pentaWinner.pentaCount > 0) ? { ...pentaWinner.player, value: pentaWinner.pentaCount, label: 'Pentakills' } : null;
-
-            // Consistency Machine (Low StdDev)
-            let consistencyMachine: any = null;
-            let lowestStdDev = 999;
-            const calcStdDev = (arr: number[]) => {
-                const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
-                const variance = arr.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / arr.length;
-                return Math.sqrt(variance);
-            };
-
-            for (const p of validStats) {
-                const stdDev = calcStdDev(p.scores);
-                if (stdDev < lowestStdDev && p.games >= 5) { // Minimum games for consistency
-                    lowestStdDev = stdDev;
-                    consistencyMachine = { ...p.player, value: stdDev.toFixed(1), label: 'Desvio Padrão' };
-                }
-            }
         }
+
+        // --- Aggregated Records ---
+        const dayDiff = (end.getTime() - start.getTime()) / (1000 * 3600 * 24);
+        const dynamicMin = dayDiff <= 7 ? 2 : (dayDiff <= 31 ? 5 : 10);
 
         // --- Aggregated Records ---
         // Lane Bully (Avg Diff @ 15) - Requires aggregating diffs.
         // Since we don't have diffs in `scores` loop easily without extra query or complex type, skipping for now or approximating?
         // Wait, I added `goldDiffAt15` to metrics in ingest. But only for NEW matches.
         // Logic: Calculate Avg Diff for players.
-        const validStats = Object.values(playerStats).filter(s => s.games >= (period === 'WEEKLY' ? 2 : 5));
+        const validStats = Object.values(playerStats).filter(s => s.games >= dynamicMin);
 
         // Penta King (Sum)
         const pentaWinner = Object.values(playerStats).sort((a, b) => b.pentaCount - a.pentaCount)[0];
@@ -1104,7 +1115,7 @@ export class RankingService {
 
         // Consistency Machine
         let consistencyMachine: any = null;
-        const consistentCandidates = Object.values(playerStats).filter(s => s.games >= (period === 'WEEKLY' ? 3 : 10) && s.scores.length > 0);
+        const consistentCandidates = Object.values(playerStats).filter(s => s.games >= (dynamicMin + 1) && s.scores.length > 0);
 
         let lowestStdDev = 999;
         const calcStdDev = (arr: number[]) => {
@@ -1142,27 +1153,14 @@ export class RankingService {
     /**
      * Hall of Shame (Contextual)
      */
-    async getHallOfShame(queueType: 'SOLO' | 'FLEX' = 'SOLO', period: 'WEEKLY' | 'MONTHLY' | 'GENERAL' = 'GENERAL') {
-        const now = new Date();
-        now.setHours(23, 59, 59, 999);
-        let startDate = new Date('2024-01-01');
-
-        if (period === 'WEEKLY') {
-            const day = now.getDay();
-            const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-            startDate = new Date(now);
-            startDate.setDate(diff);
-            startDate.setHours(0, 0, 0, 0);
-        } else if (period === 'MONTHLY') {
-            startDate = new Date(now);
-            startDate.setDate(1);
-            startDate.setHours(0, 0, 0, 0);
-        }
+    async getHallOfShame(queueType: 'SOLO' | 'FLEX' = 'SOLO', startDate?: Date, endDate?: Date) {
+        const start = startDate || new Date('2024-01-01');
+        const end = endDate || new Date();
 
         const scores = await prisma.matchScore.findMany({
             where: {
                 queueType: queueType,
-                createdAt: { gte: startDate }
+                match: { gameCreation: { gte: start, lte: end } }
             } as any,
             include: { player: true, match: true }
         });

@@ -18,3 +18,24 @@ export function isWithinWeek(dateStr: string): boolean {
 export function formatDateShort(dateStr: string): string {
     return new Date(dateStr).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' });
 }
+
+export function getDateRange(period: "GENERAL" | "MONTHLY" | "WEEKLY" | string): { start?: Date, end?: Date } | undefined {
+    if (period === "GENERAL") return undefined;
+
+    const now = new Date();
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+
+    if (period === "WEEKLY") {
+        const day = now.getDay(); // 0 (Sun) - 6 (Sat)
+        // Adjust to Monday (1) - Sunday (7)
+        // If Sunday (0), we want previous Monday (-6)
+        // If Monday (1), we want 0 diff
+        const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+        start.setDate(diff);
+    } else if (period === "MONTHLY") {
+        start.setDate(1);
+    }
+
+    return { start, end: now };
+}
