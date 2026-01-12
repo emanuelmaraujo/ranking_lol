@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Crown } from "lucide-react";
+import { PROFILE_ICON_BASE } from "@/lib/constants";
 
 interface ProfileImageProps {
     profileIconId?: number | null;
@@ -26,14 +27,14 @@ export function ProfileImage({ profileIconId, className = "w-10 h-10", alt = "Pr
 
     return (
         <img
-            src={`https://ddragon.leagueoflegends.com/cdn/16.1.1/img/profileicon/${profileIconId}.png`}
+            src={`${PROFILE_ICON_BASE}/${profileIconId}.png`}
             alt={alt}
             className={`${className} object-cover`}
             onError={(e) => {
                 // Prevent infinite loops if default also fails
                 const target = e.currentTarget;
                 target.onerror = null;
-                target.src = "https://ddragon.leagueoflegends.com/cdn/16.1.1/img/profileicon/29.png";
+                target.src = `${PROFILE_ICON_BASE}/29.png`;
             }}
         />
     );

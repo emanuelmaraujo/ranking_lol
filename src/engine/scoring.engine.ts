@@ -36,6 +36,11 @@ export interface Participant {
     timePlayed: number; // Seconds
     totalTimeSpentDead: number;
     damageDealtToBuildings: number; // NEW - For Insights
+    pentaKills?: number;
+    quadraKills?: number;
+    tripleKills?: number;
+    doubleKills?: number;
+    unrealKills?: number;
 
     // Team Stats (for KP)
     // You might need to derive team kills from the MatchDTO usually, 
@@ -95,7 +100,7 @@ interface LaneConfig {
     [key: string]: number;
 }
 
-const LAYER_WEIGHTS: Record<Lane, LaneConfig> = {
+export const LAYER_WEIGHTS: Record<Lane, LaneConfig> = {
     TOP: {
         cspm: 15,
         dpm: 15,
@@ -140,7 +145,7 @@ const LAYER_WEIGHTS: Record<Lane, LaneConfig> = {
  * @param ratio valorJogador / valorOponente
  * @param weight Peso máximo da métrica
  */
-const metricScore = (ratio: number, weight: number): number => {
+export const metricScore = (ratio: number, weight: number): number => {
     // Points of control
     const piso = weight * 0.2;
     // const base = weight * 0.7; // Not explicitly used in linear interp logic provided but implies the structure
@@ -225,7 +230,18 @@ export const calculateMatchScore = (targetPuuid: string, match: MatchDTO): Match
         heralds: (p.challenges?.riftHeraldTakedowns ?? 0),
 
         // Special: Total Objectives for Jungle/Sup logic
-        objTotal: (p.challenges?.turretTakedowns || 0) + (p.challenges?.dragonTakedowns || 0) + (p.challenges?.baronTakedowns || 0) + (p.challenges?.riftHeraldTakedowns || 0)
+        objTotal: (p.challenges?.turretTakedowns || 0) + (p.challenges?.dragonTakedowns || 0) + (p.challenges?.baronTakedowns || 0) + (p.challenges?.riftHeraldTakedowns || 0),
+
+        // Extended Stats (Feats)
+        pentaKills: p.pentaKills || 0,
+        quadraKills: p.quadraKills || 0,
+        tripleKills: p.tripleKills || 0,
+        visionScore: p.visionScore || 0,
+        totalMinionsKilled: p.totalMinionsKilled || 0,
+        neutralMinionsKilled: p.neutralMinionsKilled || 0,
+        totalDamageDealtToChampions: p.totalDamageDealtToChampions || 0,
+        goldEarned: p.goldEarned || 0,
+        deaths: p.deaths || 0 // Explicitly save deaths if needed for easy access
     };
 
     const oppMetrics: any = {

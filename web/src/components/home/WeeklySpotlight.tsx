@@ -48,8 +48,8 @@ export function WeeklySpotlight({ mvp, antiMvp }: WeeklySpotlightProps) {
                             </div>
 
                             {/* Player Content */}
-                            <div className="mt-8 text-center">
-                                <div className="relative w-32 h-32 mx-auto mb-6">
+                            <div className="mt-6 md:mt-8 text-center">
+                                <div className="relative w-24 h-24 md:w-32 md:h-32 mx-auto mb-4 md:mb-6">
                                     <div className="absolute inset-0 rounded-full border-2 border-yellow-400 animate-pulse shadow-[0_0_30px_rgba(234,179,8,0.4)] z-0" />
                                     <img
                                         src={`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/profileicon/${mvp.profileIconId || 29}.png`}
@@ -59,13 +59,13 @@ export function WeeklySpotlight({ mvp, antiMvp }: WeeklySpotlightProps) {
                                             (e.target as HTMLImageElement).src = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/profileicon/29.png`;
                                         }}
                                     />
-                                    <div className="absolute -bottom-2 -right-2 bg-yellow-500 text-black font-bold px-3 py-1 rounded-full text-xs border-2 border-[#0A0A0A] z-20">
+                                    <div className="absolute -bottom-2 -right-2 bg-yellow-500 text-black font-bold px-2 py-0.5 md:px-3 md:py-1 rounded-full text-[10px] md:text-xs border-2 border-[#0A0A0A] z-20">
                                         GOD
                                     </div>
                                 </div>
 
-                                <h3 className="text-4xl font-[family-name:var(--font-outfit)] font-black text-white uppercase tracking-wider mb-2">{mvp.gameName}</h3>
-                                <div className="flex items-center justify-center gap-4 text-yellow-500/80 font-mono text-sm">
+                                <h3 className="text-2xl md:text-4xl font-[family-name:var(--font-outfit)] font-black text-white uppercase tracking-wider mb-2 break-words">{mvp.gameName}</h3>
+                                <div className="flex items-center justify-center gap-4 text-yellow-500/80 font-mono text-xs md:text-sm">
                                     <span>#{mvp.tagLine}</span>
                                     {mvp.tier && <span>• {mvp.tier}</span>}
                                 </div>

@@ -14,7 +14,7 @@ services:
     networks:
       - ranking_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d ranking_lol"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-ranking_lol}"]
       interval: 10s
       timeout: 5s
       retries: 5

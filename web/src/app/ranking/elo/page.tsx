@@ -70,7 +70,7 @@ export default function RankingPage() {
     const [loading, setLoading] = useState(true);
 
     // View Config
-    const [viewMode, setViewMode] = useState<"TIER" | "GLOBAL" | "LANE">("TIER");
+    const [viewMode, setViewMode] = useState<"TIER" | "GLOBAL" | "LANE">("GLOBAL");
     const [period, setPeriod] = useState<"GENERAL" | "MONTHLY" | "WEEKLY">("GENERAL");
 
     // Filters
@@ -152,8 +152,8 @@ export default function RankingPage() {
             {/* Header with Mode Switcher */}
             <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
                 <div>
-                    <h2 className="text-4xl font-[family-name:var(--font-outfit)] font-bold text-white tracking-tight flex items-center gap-3">
-                        <Trophy className="w-10 h-10 text-yellow-500" />
+                    <h2 className="text-3xl md:text-4xl font-[family-name:var(--font-outfit)] font-bold text-white tracking-tight flex items-center gap-3">
+                        <Trophy className="w-8 h-8 md:w-10 md:h-10 text-yellow-500" />
                         <span className="bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
                             Ranking da Temporada
                         </span>
@@ -450,7 +450,8 @@ export default function RankingPage() {
                             <div className="col-span-4 md:col-span-3 lg:col-span-3">Jogador</div>
                             <div className="col-span-3 md:col-span-2 lg:col-span-2">Elo</div>
                             <div className="col-span-2 md:col-span-2 text-center">Partidas</div>
-                            <div className="col-span-2 md:col-span-4 lg:col-span-4 text-right pr-4">
+                            <div className="col-span-1 md:col-span-1 lg:col-span-1 text-center">Média</div>
+                            <div className="col-span-2 md:col-span-4 lg:col-span-3 text-right pr-4">
                                 {viewMode === "LANE" ? "Pontuação da Rota" : "Pontuação Global"}
                             </div>
                         </div>
@@ -514,7 +515,10 @@ export default function RankingPage() {
                                         </div>
                                     </div>
 
-                                    <div className="col-span-2 md:col-span-4 lg:col-span-4 text-right pr-4">
+                                    <div className="col-span-1 md:col-span-1 lg:col-span-1 text-center text-white font-mono">
+                                        {player.avgScore.toFixed(1)}
+                                    </div>
+                                    <div className="col-span-2 md:col-span-4 lg:col-span-3 text-right pr-4">
                                         <div className="flex flex-col items-end">
                                             <span className="text-xl font-black text-white group-hover:scale-110 transition-transform bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-emerald-200">
                                                 {viewMode === "LANE"

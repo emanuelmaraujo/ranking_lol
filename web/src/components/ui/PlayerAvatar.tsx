@@ -1,6 +1,7 @@
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { getTheme } from '@/lib/tier-themes';
+import { PROFILE_ICON_BASE } from '@/lib/constants';
 
 interface PlayerAvatarProps {
     profileIconId?: number | null;
@@ -30,8 +31,8 @@ export function PlayerAvatar({ profileIconId, summonerLevel, className, size = '
     const finalShadow = theme.colors.glow;
 
     const iconUrl = profileIconId
-        ? `https://ddragon.leagueoflegends.com/cdn/16.1.1/img/profileicon/${profileIconId}.png`
-        : `https://ddragon.leagueoflegends.com/cdn/16.1.1/img/profileicon/29.png`;
+        ? `${PROFILE_ICON_BASE}/${profileIconId}.png`
+        : `${PROFILE_ICON_BASE}/29.png`;
 
     return (
         <div className={twMerge("relative inline-block", className)}>
@@ -40,7 +41,7 @@ export function PlayerAvatar({ profileIconId, summonerLevel, className, size = '
                 alt="Avatar"
                 loading="lazy"
                 onError={(e) => {
-                    e.currentTarget.src = "https://ddragon.leagueoflegends.com/cdn/16.1.1/img/profileicon/29.png";
+                    e.currentTarget.src = `${PROFILE_ICON_BASE}/29.png`;
                 }}
                 className={clsx(
                     "rounded-2xl object-cover border-2 transition-transform duration-500 hover:scale-110 hover:rotate-2",

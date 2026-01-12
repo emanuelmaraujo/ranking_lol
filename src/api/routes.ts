@@ -292,14 +292,14 @@ export async function rankingRoutes(fastify: FastifyInstance) {
     });
 
     // 10. Global Matches & Highlights
-    interface GlobalMatchesQuery { page?: number; limit?: number; player?: string; lane?: string; queue?: string; }
+    interface GlobalMatchesQuery { page?: number; limit?: number; player?: string; lane?: string; queue?: string; champion?: string; }
     fastify.get<{ Querystring: GlobalMatchesQuery }>('/api/matches', async (request, reply) => {
-        const { page = 1, limit = 20, player, lane, queue } = request.query;
+        const { page = 1, limit = 20, player, lane, queue, champion } = request.query;
         const p = Number(page) || 1;
         const l = Number(limit) || 20;
 
         try {
-            return await rankingService.getGlobalMatches(p, l, { playerPuuid: player, lane, queue });
+            return await rankingService.getGlobalMatches(p, l, { playerPuuid: player, lane, queue, champion });
         } catch (error) {
             console.error(error);
             reply.status(500).send({ error: 'Internal Server Error' });
@@ -325,10 +325,11 @@ export async function rankingRoutes(fastify: FastifyInstance) {
         }
     });
 
-
-    fastify.get('/api/matches/highlights', async (request, reply) => {
+    interface HighlightsQuery2 { period?: 'DAILY' | 'WEEKLY' | 'MONTHLY'; queue?: string; }
+    fastify.get<{ Querystring: HighlightsQuery2 }>('/api/matches/highlights', async (request, reply) => {
+        const { period = 'DAILY', queue = 'SOLO' } = request.query;
         try {
-            return await rankingService.getGlobalHighlights();
+            return await rankingService.getGlobalHighlights(period, queue);
         } catch (error) {
             console.error(error);
             reply.status(500).send({ error: 'Internal Server Error' });

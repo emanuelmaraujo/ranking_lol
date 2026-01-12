@@ -2,6 +2,7 @@
 
 import { Trophy, Activity, Target, Flame, Hourglass, Swords } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { PROFILE_ICON_BASE } from '@/lib/constants';
 
 export interface InsightData {
     period: string;
@@ -148,7 +149,7 @@ export function MatchesInsights({ data, period, onPeriodChange }: Props) {
 
                             {card.player?.profileIconId && (
                                 <img
-                                    src={`https://ddragon.leagueoflegends.com/cdn/14.1.1/img/profileicon/${card.player.profileIconId}.png`}
+                                    src={`${PROFILE_ICON_BASE}/${card.player.profileIconId}.png`}
                                     alt=""
                                     className="w-10 h-10 rounded-full border-2 border-white/10 group-hover:scale-110 transition-transform shadow-lg ml-2"
                                 />

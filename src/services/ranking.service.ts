@@ -1,3 +1,4 @@
+import { MatchDTO, Participant, calculateMatchScore, LAYER_WEIGHTS, metricScore } from "../engine/scoring.engine";
 import { PrismaClient } from '@prisma/client';
 import { RiotService } from './riot.service';
 
@@ -47,22 +48,60 @@ export class RankingService {
      * Helper to get Start Date for a given period
      * Enforces Monday-Sunday logic for Weekly
      */
+    /**
+     * Helper to get Start Date for a given period
+     * Enforces Monday-Sunday logic for Weekly in Brazil Time (UTC-3)
+     */
     public getStartDateForPeriod(period: 'WEEKLY' | 'MONTHLY' | 'GENERAL'): Date {
         const now = new Date();
-        const startDate = new Date();
-        startDate.setHours(0, 0, 0, 0);
+        // 1. Convert Current Time to Brazil Time to determine "Today" in Brazil
+        // UTC-3
+        const brazilOffset = -3 * 60; // minutes
+        const nowInBrazil = new Date(now.getTime() + (brazilOffset * 60 * 1000) - (now.getTimezoneOffset() * 60 * 1000));
+        // Note: The above formula (now + offset) creates a Date object that "looks" like Brazil time in UTC representation if printed.
+        // Better approach: Work with UTC dates but shifted.
 
+        // Correct Approach:
+        // 1. Get current UTC time
+        // 2. Subtract 3 hours
+        // 3. Set hours to 00:00:00
+        // 4. Add 3 hours back? No, we want the query to match >= StartTime.
+        // If StartTime is "Monday 00:00 BRT", that is "Monday 03:00 UTC".
+
+        // Correct Approach using UTC methods explicitly to avoid local node TZ confusion
+        // 1. Get current UTC time
+        // 2. Shift to "Brazil Hour" (UTC-3)
+        // 3. Floor to Midnight
+        // 4. Shift back to UTC (+3)
+
+        const nowUtc = new Date(now.getTime()); // Clone
+        const currentUtcHour = nowUtc.getUTCHours();
+        const brazilHour = currentUtcHour - 3; // Might be negative, Date handles it
+
+        const workingDate = new Date(nowUtc);
+        workingDate.setUTCHours(brazilHour, 0, 0, 0);
+        // workingDate is now "Today 00:00" or "Yesterday 00:00" effectively in pure UTC magnitude terms relative to Brazil... 
+        // wait.
+        // Easier: Just subtract 3 hours from timestamp, then floor to UTC midnight, then add 3h.
+
+        const msInHour = 60 * 60 * 1000;
+        const brazilTs = now.getTime() - (3 * msInHour);
+        const brazilDate = new Date(brazilTs);
+        brazilDate.setUTCHours(0, 0, 0, 0); // Floor to UTC midnight representing Brazil Midnight
+
+        // Adjust for Weekly
         if (period === 'WEEKLY') {
-            const day = now.getDay();
-            const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Monday
-            startDate.setDate(diff);
+            const day = brazilDate.getUTCDay(); // 0 (Sun) - 6 (Sat)
+            const diff = day === 0 ? -6 : 1 - day;
+            brazilDate.setUTCDate(brazilDate.getUTCDate() + diff);
         } else if (period === 'MONTHLY') {
-            startDate.setDate(1); // 1st of month
+            brazilDate.setUTCDate(1);
         } else {
-            // General / Season
-            return new Date('2026-01-01'); // Season Start
+            return new Date('2026-01-01T03:00:00.000Z');
         }
-        return startDate;
+
+        // Add 3 hours back to get the UTC timestamp of Brazil Midnight
+        return new Date(brazilDate.getTime() + (3 * msInHour));
     }
 
     /**
@@ -1335,7 +1374,18 @@ export class RankingService {
 
         }
 
+        // 12. Top Loser (O Derretido) - Reuse PDL Ranking logic but look for bottom
+        const pdlRanking = await this.getPdlGainRanking(queueType, 100, start); // Get widely
+        // Sort by gain asc (lowest first)
+        const losers = pdlRanking.sort((a, b) => a.pdlGain - b.pdlGain);
+        const topLoser = (losers.length > 0 && losers[0].pdlGain < 0) ? {
+            gameName: losers[0].gameName,
+            profileIconId: losers[0].profileIconId,
+            pdlLoss: losers[0].pdlGain // Negative value
+        } : null;
+
         return {
+            topLoser,
             lowDmg,
             alface,
             visionNegligente,
@@ -1354,7 +1404,7 @@ export class RankingService {
     /**
      * Get Global Matches (with filters)
      */
-    async getGlobalMatches(page: number = 1, limit: number = 20, filters?: { playerPuuid?: string, lane?: string, queue?: string }) {
+    async getGlobalMatches(page: number = 1, limit: number = 20, filters?: { playerPuuid?: string, lane?: string, queue?: string, champion?: string }) {
         const skip = (page - 1) * limit;
         const where: any = {};
 
@@ -1368,6 +1418,13 @@ export class RankingService {
 
         if (filters?.queue && filters.queue !== 'ALL') {
             where.queueType = filters.queue;
+        }
+
+        if (filters?.champion) {
+            where.championName = {
+                contains: filters.champion,
+                mode: 'insensitive' // Postgres specific, verify if supported or use manual casing
+            };
         }
 
         const matches = await prisma.matchScore.findMany({
@@ -1442,23 +1499,20 @@ export class RankingService {
     /**
      * Get Global Highlights (Filtered by Period and Queue)
      */
-    async getGlobalHighlights(period: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'ALL' = 'DAILY', queue: string = 'SOLO') {
+    async getGlobalHighlights(period: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'ALL' | 'GENERAL' = 'DAILY', queue: string = 'SOLO') {
         const now = new Date();
         let startDate: Date;
 
-        if (period === 'ALL') {
+        if (period === 'ALL' || period === 'GENERAL') {
             startDate = new Date(0); // Beginning of time
         } else if (period === 'MONTHLY') {
             startDate = this.getStartDateForPeriod('MONTHLY');
         } else if (period === 'WEEKLY') {
             startDate = this.getStartDateForPeriod('WEEKLY');
         } else {
-            // DAILY: Strict Brazil Time (UTC-3) 00:00 - 23:59
-            // 1. Shift current UTC time to Brazil Time (-3h)
+            // DAILY
             const brazilTime = new Date(now.getTime() - 3 * 60 * 60 * 1000);
-            // 2. Floor to midnight
             brazilTime.setHours(0, 0, 0, 0);
-            // 3. Shift back to UTC (+3h) to get the query timestamp
             startDate = new Date(brazilTime.getTime() + 3 * 60 * 60 * 1000);
         }
 
@@ -1467,7 +1521,6 @@ export class RankingService {
             match: { gameCreation: { gte: startDate } }
         };
         if (queue && queue !== 'ALL') {
-            // If queue is specific
             where.queueType = queue;
         }
 
@@ -1479,84 +1532,455 @@ export class RankingService {
             }
         });
 
-        const playerStats: Record<string, { games: number, wins: number, player: any }> = {};
-
         // 3. Init Stats
         let mostGames = { value: 0, player: null as any };
         let bestWr = { value: 0, games: 0, player: null as any };
         let worstWr = { value: 100, games: 0, player: null as any };
         let highestDmg = { value: 0, champion: '', player: null as any, matchId: '' };
-        let longestGame = { value: 0, champion: '', player: null as any, matchId: '' };
-        let mostPlayedChamp: Record<string, number> = {};
+        let highestVision = { value: 0, champion: '', player: null as any };
+        let highestCS = { value: 0, champion: '', player: null as any };
+        let highestAssists = { value: 0, champion: '', player: null as any };
+        let longestStreak = { value: 0, player: null as any, type: 'WIN' }; // or LOSS
+        let shortestGame = { value: 999999, champion: '', player: null as any, matchId: '' };
+        let mvp = { value: 0, games: 0, player: null as any };
 
         // 4. Process Matches
+        const champStats: Record<string, { games: number, wins: number }> = {};
+        const playerMatches: Record<string, any[]> = {};
+        const playerStats: Record<string, { games: number, wins: number, totalScore: number, player: any }> = {};
+
+
         scores.forEach(s => {
+            if (!playerMatches[s.playerId]) playerMatches[s.playerId] = [];
+            playerMatches[s.playerId].push(s);
+
             // Player Aggregates
             if (!playerStats[s.playerId]) {
-                playerStats[s.playerId] = { games: 0, wins: 0, player: s.player };
+                playerStats[s.playerId] = { games: 0, wins: 0, totalScore: 0, player: s.player };
             }
             playerStats[s.playerId].games++;
+            playerStats[s.playerId].totalScore += (s.matchScore || 0);
             if (s.isVictory) playerStats[s.playerId].wins++;
 
-            // Global Highs
-            const dmg = (s.metrics as any).totalDamage || 0;
+            // Metrics
+            const metrics = s.metrics as any;
+            const dmg = metrics.totalDamage || 0;
+            const vis = metrics.visionScore || 0;
+            const cs = (metrics.totalMinionsKilled || 0) + (metrics.neutralMinionsKilled || 0);
+            const assists = metrics.assists || 0;
+
             if (dmg > highestDmg.value) {
                 highestDmg = { value: dmg, champion: s.championName, player: s.player, matchId: s.matchId };
             }
-
-            const duration = s.match.gameDuration;
-            if (duration > longestGame.value) {
-                longestGame = { value: duration, champion: s.championName, player: s.player, matchId: s.matchId };
+            if (vis > highestVision.value) {
+                highestVision = { value: vis, champion: s.championName, player: s.player };
+            }
+            if (cs > highestCS.value) {
+                highestCS = { value: cs, champion: s.championName, player: s.player };
+            }
+            if (assists > highestAssists.value) {
+                highestAssists = { value: assists, champion: s.championName, player: s.player };
             }
 
-            // Champion Frequency
-            mostPlayedChamp[s.championName] = (mostPlayedChamp[s.championName] || 0) + 1;
+            // Shortest Game (Only Wins count for "Speedrun" typically, but let's check victory)
+            // Actually, shortest game is usually interesting if it is a win. 
+            // Let's filter for wins only for "Speedrun" to avoid surrender losses being highlighted.
+            if (s.isVictory && s.match.gameDuration < shortestGame.value && s.match.gameDuration > 300) { // Min 5 mins
+                shortestGame = { value: s.match.gameDuration, champion: s.championName, player: s.player, matchId: s.matchId };
+            }
+
+            // Champ Stats
+            if (!champStats[s.championName]) {
+                champStats[s.championName] = { games: 0, wins: 0 };
+            }
+            champStats[s.championName].games++;
+            if (s.isVictory) champStats[s.championName].wins++;
         });
 
-        // 5. Calculate Final Stats (WR etc)
-        // Min games for WR consideration -> > 1
-        const minGamesForWr = 2;
+        // 5. Calculate Final Stats (WR, MVP)
+        const minGames = (period === 'DAILY' || period === 'WEEKLY') ? 1 : 2;
 
         Object.values(playerStats).forEach(stat => {
-            // Most Games
             if (stat.games > mostGames.value) {
                 mostGames = { value: stat.games, player: stat.player };
             }
 
-            // WR Stats
-            if (stat.games >= minGamesForWr) {
+            if (stat.games >= minGames) {
                 const wr = (stat.wins / stat.games) * 100;
+                const avgScore = stat.totalScore / stat.games;
 
-                // Best
+                // WR
                 if (wr > bestWr.value || (wr === bestWr.value && stat.games > bestWr.games)) {
                     bestWr = { value: wr, games: stat.games, player: stat.player };
                 }
-
-                // Worst
                 if (wr < worstWr.value || (wr === worstWr.value && stat.games > worstWr.games)) {
                     worstWr = { value: wr, games: stat.games, player: stat.player };
+                }
+
+                // MVP (Avg Score)
+                if (avgScore > mvp.value) {
+                    mvp = { value: avgScore, games: stat.games, player: stat.player };
                 }
             }
         });
 
-        // Most Played Champion
-        let popularChamp = { name: '', count: 0 };
-        Object.entries(mostPlayedChamp).forEach(([name, count]) => {
-            if (count > popularChamp.count) {
-                popularChamp = { name, count };
+        // 5. Calculate Player Stats (WR, Streaks)
+        const minGamesForWr = (period === 'DAILY' || period === 'WEEKLY') ? 1 : 2;
+
+        Object.keys(playerMatches).forEach(pid => {
+            const matches = playerMatches[pid];
+            const player = matches[0].player; // info
+            const games = matches.length;
+            const wins = matches.filter(m => m.isVictory).length;
+            const wr = (wins / games) * 100;
+
+            // Check Streak (matches are desc)
+            let currentStr = 0;
+            let isWinStr = matches[0].isVictory;
+            for (const m of matches) {
+                if (m.isVictory === isWinStr) {
+                    currentStr++;
+                } else {
+                    break;
+                }
+            }
+
+            if (isWinStr && currentStr > longestStreak.value) {
+                longestStreak = { value: currentStr, player, type: 'WIN' };
+            }
+
+            // Stats
+            if (games > mostGames.value) mostGames = { value: games, player };
+
+            if (games >= minGamesForWr) {
+                if (wr > bestWr.value || (wr === bestWr.value && games > bestWr.games)) {
+                    bestWr = { value: wr, games, player };
+                }
+                if (wr < worstWr.value || (wr === worstWr.value && games > worstWr.games)) {
+                    worstWr = { value: wr, games, player };
+                }
             }
         });
+
+        // Most Played Champion (Filter: Must have >= 50% WR if possible)
+        let popularChamp = { name: '', count: 0, winrate: 0 };
+
+        // Convert to array and sort by count desc
+        const sortedChamps = Object.entries(champStats)
+            .map(([name, stat]) => ({
+                name,
+                count: stat.games,
+                winrate: (stat.wins / stat.games) * 100
+            }))
+            .sort((a, b) => b.count - a.count);
+
+        // Find first with WR >= 50%
+        const positiveChamp = sortedChamps.find(c => c.winrate >= 50);
+
+        if (positiveChamp) {
+            popularChamp = positiveChamp;
+        } else if (sortedChamps.length > 0) {
+            // Fallback: If nobody has positive WR, take the most played anyway (or user preference: hide it? "winrate negativo não deve aparecer")
+            // User said: "winrate negativo não deve aparecer". So if no positive champ, return null.
+            popularChamp = { name: '', count: 0, winrate: 0 };
+        }
 
         return {
             period,
             queue,
-            mostGames,
+            mostGames: mostGames.value > 0 ? mostGames : null,
             bestWr: bestWr.games > 0 ? bestWr : null,
             worstWr: worstWr.games > 0 ? worstWr : null,
             highestDmg: highestDmg.value > 0 ? highestDmg : null,
-            longestGame: longestGame.value > 0 ? longestGame : null,
-            popularChamp: popularChamp.count > 0 ? popularChamp : null
+            highestVision: highestVision.value > 0 ? highestVision : null,
+            highestCS: highestCS.value > 0 ? highestCS : null,
+            highestAssists: highestAssists.value > 0 ? highestAssists : null,
+            longestStreak: longestStreak.value > 1 ? longestStreak : null, // Only streak > 1 matters
+            popularChamp: popularChamp.count > 0 ? popularChamp : null, // Will be null if no positive champ
+            mvp: mvp.value > 0 ? mvp : null,
+            shortestGame: shortestGame.value < 999999 ? shortestGame : null
         };
+    }
+
+    /**
+     * Get Community Feats (Aggregated Stats)
+     */
+    async getCommunityFeats(queueType: 'SOLO' | 'FLEX', startDate?: Date, endDate?: Date) {
+        // 1. Fetch ALL scores for the period (Efficient Select)
+        const allScores = await prisma.matchScore.findMany({
+            where: {
+                queueType,
+                match: {
+                    gameCreation: {
+                        gte: startDate,
+                        lte: endDate
+                    }
+                }
+            },
+            select: {
+                playerId: true,
+                isVictory: true,
+                matchScore: true,
+                championName: true,
+                lane: true,
+                kills: true,
+                deaths: true,
+                matchId: true,
+                match: { select: { gameCreation: true, gameDuration: true } },
+                metrics: true,
+                player: {
+                    select: {
+                        gameName: true,
+                        tagLine: true,
+                        profileIconId: true,
+                        tier: true
+                    }
+                }
+            }
+        });
+
+        // Initialize Aggregators
+        const pentas: any[] = [];
+        const highScores: any[] = [];
+        const killsTracker: Record<string, { kills: number, duration: number, player: any }> = {};
+        const farmTracker: Record<string, { csMin: number, totalCs: number, player: any }> = {};
+        const visionTracker: Record<string, { visMin: number, player: any }> = {};
+        const deathTracker: Record<string, { deaths: number, games: number, player: any }> = {};
+        const versatileTracker: Record<string, { roles: Set<string>, player: any }> = {};
+
+        // Single Pass Loop
+        // Group by Player for Streak Logic
+        const playerGames: Record<string, typeof allScores> = {};
+
+        for (const score of allScores) {
+            const pid = score.playerId;
+            const metrics = score.metrics as any;
+            const cs = (metrics.totalMinionsKilled || 0) + (metrics.neutralMinionsKilled || 0);
+            const durationMin = Math.max(1, (score.match?.gameDuration || 1) / 60);
+            const csMin = cs / durationMin;
+            const visMin = (metrics.visionScore || 0) / durationMin;
+
+            // 1. Pentas
+            if (metrics.pentaKills > 0) {
+                pentas.push({
+                    player: score.player,
+                    champion: score.championName,
+                    matchId: score.matchId,
+                    date: score.match?.gameCreation,
+                    victims: [] // Would need deeper query, skipping for perf
+                });
+            }
+
+            // 2. High Score (Intankavel)
+            if (score.matchScore > 15) {
+                highScores.push({
+                    score: score.matchScore,
+                    player: score.player,
+                    kda: `${score.kills}/${score.deaths || 0}/${(metrics.assists || 0)}`,
+                    champion: score.championName,
+                    metrics: {
+                        dmgShare: metrics.teamDamagePercentage || 0,
+                        kp: metrics.kp || 0,
+                        vision: metrics.visionScore || 0
+                    }
+                });
+            }
+
+            // 3. Kills (Carniceiro)
+            if (!killsTracker[pid]) killsTracker[pid] = { kills: 0, duration: 0, player: score.player };
+            killsTracker[pid].kills += score.kills;
+            killsTracker[pid].duration += durationMin;
+
+            // 4. Farm (Farmville)
+            if (!farmTracker[pid]) farmTracker[pid] = { csMin: 0, totalCs: 0, player: score.player };
+            if (csMin > farmTracker[pid].csMin) farmTracker[pid].csMin = csMin;
+            farmTracker[pid].totalCs += cs;
+
+            // 5. Vision (Visionario)
+            if (!visionTracker[pid]) visionTracker[pid] = { visMin: 0, player: score.player };
+            if (visMin > visionTracker[pid].visMin) visionTracker[pid].visMin = visMin;
+
+            // 6. Deaths (Sobrevivente)
+            if (!deathTracker[pid]) deathTracker[pid] = { deaths: 0, games: 0, player: score.player };
+            deathTracker[pid].deaths += score.deaths;
+            deathTracker[pid].games += 1;
+
+            // 7. Versatile (Multitarefa)
+            if (score.isVictory) {
+                if (!versatileTracker[pid]) versatileTracker[pid] = { roles: new Set(), player: score.player };
+                if (score.lane && score.lane !== 'UNKNOWN') versatileTracker[pid].roles.add(score.lane);
+            }
+
+            // Group for Streaks
+            if (!playerGames[pid]) playerGames[pid] = [];
+            playerGames[pid].push(score);
+        }
+
+        // Post-Process Streaks
+        const streakResults: any[] = [];
+        const versatileResults: any[] = [];
+
+        // Versatile Finalize
+        Object.values(versatileTracker).forEach(v => {
+            if (v.roles.size >= 3) {
+                versatileResults.push({
+                    player: v.player,
+                    roles: Array.from(v.roles),
+                    count: v.roles.size
+                });
+            }
+        });
+
+        // Streaks Finalize
+        Object.entries(playerGames).forEach(([pid, games]) => {
+            // Sort by date ASC
+            games.sort((a, b) => new Date(a.match.gameCreation).getTime() - new Date(b.match.gameCreation).getTime());
+
+            let currentStreak = 0;
+            let maxStreak = 0;
+            // let streakLp = 0; // Approx
+
+            games.forEach(g => {
+                if (g.isVictory) {
+                    currentStreak++;
+                    if (currentStreak > maxStreak) maxStreak = currentStreak;
+                } else {
+                    currentStreak = 0;
+                }
+            });
+
+            if (maxStreak >= 3) {
+                streakResults.push({
+                    player: games[0].player,
+                    streak: maxStreak,
+                    lp: maxStreak * 20 // Dummy calc for now
+                });
+            }
+        });
+
+        // Sort and Limit
+        return {
+            pentas: pentas.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            highScores: highScores.sort((a, b) => b.score - a.score).slice(0, 5),
+            mostKills: Object.values(killsTracker)
+                .map(k => ({ ...k, killsPerHour: (k.kills / (k.duration / 60)) }))
+                .sort((a, b) => b.kills - a.kills).slice(0, 5),
+            bestFarm: Object.values(farmTracker).sort((a, b) => b.csMin - a.csMin).slice(0, 5),
+            bestVision: Object.values(visionTracker).sort((a, b) => b.visMin - a.visMin).slice(0, 5),
+            survivors: Object.values(deathTracker).filter(d => d.games >= 5).sort((a, b) => (a.deaths / a.games) - (b.deaths / b.games)).slice(0, 5),
+            streaks: streakResults.sort((a, b) => b.streak - a.streak).slice(0, 5),
+            versatile: versatileResults.sort((a, b) => b.count - a.count).slice(0, 5)
+        };
+    }
+
+    /**
+     * Get Community Duos (Social Stats)
+     */
+    async getCommunityDuos(queueType: 'SOLO' | 'FLEX', startDate?: Date, endDate?: Date) {
+        // Fetch Matches
+        const matches = await prisma.match.findMany({
+            where: {
+                queueType,
+                gameCreation: { gte: startDate, lte: endDate }
+            },
+            include: {
+                scores: {
+                    select: {
+                        playerId: true,
+                        isVictory: true,
+                        matchScore: true,
+                        player: {
+                            select: {
+                                gameName: true,
+                                tagLine: true,
+                                profileIconId: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        const duoTracker: Record<string, { p1: any, p2: any, wins: number, games: number, scoreSum: number }> = {};
+        const squadTracker: Record<string, { members: any[], wins: number, games: number, scoreSum: number }> = {};
+
+        for (const match of matches) {
+            // Group by Team (Win vs Loss)
+            const winners = match.scores.filter(s => s.isVictory);
+            const losers = match.scores.filter(s => !s.isVictory);
+
+            const processTeam = (team: typeof winners) => {
+                if (team.length < 2) return;
+
+                // Sort players by ID to ensure consistent keys
+                const players = team.sort((a, b) => a.playerId.localeCompare(b.playerId));
+                const pIds = players.map(p => p.playerId).join('|');
+
+                // Flex Squad (3+ members)
+                if (queueType === 'FLEX' && players.length >= 3) {
+                    if (!squadTracker[pIds]) {
+                        squadTracker[pIds] = {
+                            members: players.map(p => p.player),
+                            wins: 0,
+                            games: 0,
+                            scoreSum: 0
+                        };
+                    }
+                    squadTracker[pIds].games++;
+                    squadTracker[pIds].scoreSum += players.reduce((acc, p) => acc + p.matchScore, 0);
+                    if (team[0].isVictory) squadTracker[pIds].wins++;
+                }
+
+                // Duos (All permutations of size 2)
+                for (let i = 0; i < players.length; i++) {
+                    for (let j = i + 1; j < players.length; j++) {
+                        const p1 = players[i];
+                        const p2 = players[j];
+                        const key = `${p1.playerId}|${p2.playerId}`;
+
+                        if (!duoTracker[key]) {
+                            duoTracker[key] = {
+                                p1: p1.player,
+                                p2: p2.player,
+                                wins: 0,
+                                games: 0,
+                                scoreSum: 0
+                            };
+                        }
+                        duoTracker[key].games++;
+                        duoTracker[key].scoreSum += (p1.matchScore + p2.matchScore);
+                        if (team[0].isVictory) duoTracker[key].wins++;
+                    }
+                }
+            };
+
+            processTeam(winners);
+            processTeam(losers);
+        }
+
+        // Casal 20 (Best Duo by Wins -> Winrate)
+        const duos = Object.values(duoTracker)
+            .filter(d => d.games >= 3) // Min games
+            .map(d => ({
+                ...d,
+                winRate: (d.wins / d.games) * 100,
+                avgScore: d.scoreSum / (d.games * 2),
+                synergy: (d.wins / d.games) * 100 // Placeholder for deeper synergy
+            }))
+            .sort((a, b) => b.wins - a.wins || b.winRate - a.winRate)
+            .slice(0, 5);
+
+        // Bonde (Best Squad by Games -> Score)
+        const squads = Object.values(squadTracker)
+            .filter(s => s.games >= 2)
+            .map(s => ({
+                ...s,
+                avgScore: s.scoreSum / (s.games * s.members.length)
+            }))
+            .sort((a, b) => b.games - a.games || b.avgScore - a.avgScore)
+            .slice(0, 5);
+
+        return { duos, squads };
     }
 
     /**
@@ -1572,11 +1996,13 @@ export class RankingService {
 
         if (!score) return null; // Should not happen if history lists it
 
-        // 2. Check if Cache Hit (Opponent info exists)
-        if (score.opponentChampionName && score.opponentMetrics) {
+        // 2. Check if Cache Hit (Opponent info exists AND has new fields)
+        const cachedOpp = score.opponentMetrics as any;
+        // Strict check: must have turrets, kp, and tankiness to be considered "fresh"
+        if (score.opponentChampionName && cachedOpp && cachedOpp.turrets !== undefined && cachedOpp.kp !== undefined) {
             console.log(`[Cache] Hit for Match ${matchId}`);
             // Return cached format
-            return this.formatMatchDetailResponse(score, score.opponentChampionName, score.opponentMetrics as any, score.opponentChampionId || 0);
+            return this.formatMatchDetailResponse(score, score.opponentChampionName, cachedOpp, score.opponentChampionId || 0);
         }
 
         // 3. Cache Miss: Fetch from Riot
@@ -1598,20 +2024,50 @@ export class RankingService {
             // 5. Build Metrics & Update DB
             let oppName = 'Unknown';
             let oppId = 0;
-            let oppMetrics = {};
+            let oppMetrics: any = {};
 
             if (opponentPart) {
                 oppName = opponentPart.championName;
                 oppId = opponentPart.championId;
 
-                // Calculate essential metrics for comparison
+                // Helper: Get Team Kills
+                const oppTeamKills = matchDto.info.participants
+                    .filter((p: any) => p.teamId === opponentPart.teamId)
+                    .reduce((sum: number, p: any) => sum + p.kills, 0);
+
+                const oppKp = oppTeamKills > 0 ? (opponentPart.kills + opponentPart.assists) / oppTeamKills : 0;
+
+                // Helper: Tankiness (Engine Formula: TimeAlive / DamageTaken)
+                // Note: Engine uses (Duration - TimeSpentDead) / Max(1, DamageTaken)
+                // If damage taken is high, score is low? Engine logic seems to emphasize SURVIVAL per damage taken.
+                // We must mirror engine exactly.
                 const duration = matchDto.info.gameDuration;
+                const oppTankiness = (duration - opponentPart.totalTimeSpentDead) / Math.max(1, opponentPart.totalDamageTaken);
+
+                // Capture Objective Counts (using challenges if available for better accuracy)
                 oppMetrics = {
                     kda: `${opponentPart.kills}/${opponentPart.deaths}/${opponentPart.assists}`,
+                    kills: opponentPart.kills,
+                    deaths: opponentPart.deaths,
+                    assists: opponentPart.assists,
                     cs: (opponentPart.totalMinionsKilled || 0) + (opponentPart.neutralMinionsKilled || 0),
                     gold: opponentPart.goldEarned || 0,
                     damage: opponentPart.totalDamageDealtToChampions || 0,
                     vision: opponentPart.visionScore || 0,
+
+                    // New Metrics
+                    kp: oppKp, // Stored as 0.0 - 1.0
+                    tankiness: oppTankiness,
+
+                    // Objectives
+                    turrets: opponentPart.turretKills || opponentPart.challenges?.turretTakedowns || 0,
+                    dragons: opponentPart.dragonKills || opponentPart.challenges?.dragonTakedowns || 0,
+                    barons: opponentPart.baronKills || opponentPart.challenges?.baronTakedowns || 0,
+                    // Total Obj for Jungler/Sup calculations
+                    objTotal: (opponentPart.turretKills || opponentPart.challenges?.turretTakedowns || 0) +
+                        (opponentPart.dragonKills || opponentPart.challenges?.dragonTakedowns || 0) +
+                        (opponentPart.baronKills || opponentPart.challenges?.baronTakedowns || 0) +
+                        (opponentPart.challenges?.riftHeraldTakedowns || 0)
                 };
 
                 // SAVE TO DB
@@ -1636,6 +2092,116 @@ export class RankingService {
     }
 
     private formatMatchDetailResponse(score: any, oppName: string, oppMetrics: any, oppId: number) {
+        const durationMin = Math.max(1, score.match.gameDuration / 60);
+        const metrics = score.metrics as any || {};
+
+        // Helper for Per Minute (only for opponents if raw data is provided)
+        const getPM = (val: number) => (val / durationMin).toFixed(1);
+
+        // Player Stats - Mapped correctly from Scoring Engine "metrics" JSON
+        // Note: Engine stores 'cspm', 'dpm', 'gpm' directly.
+        // It does NOT store raw 'totalMinionsKilled' in metrics JSON usually.
+        // We use the pre-calculated per-minute values from the engine for accuracy.
+        const playerStats = {
+            cspm: metrics.cspm || 0,
+            gpm: metrics.gpm || 0,
+            dpm: metrics.dpm || 0,
+            vspm: metrics.vspm || 0,
+            turrets: metrics.turrets || 0, // Engine key is 'turrets', not 'turretKills'
+            dragons: metrics.dragons || 0,
+            barons: metrics.barons || 0
+        };
+
+        // Logic for Weights & Points calculation
+        const lane = score.lane as 'TOP' | 'JUNGLE' | 'MIDDLE' | 'BOTTOM' | 'UTILITY';
+        const laneWeights = LAYER_WEIGHTS[lane] || LAYER_WEIGHTS['MIDDLE']; // Fallback
+
+        const performanceMetrics: any[] = [];
+
+        // Map for display labels
+        const labels: Record<string, string> = {
+            cspm: 'CS/min',
+            dpm: 'Dano/min',
+            gpm: 'Gold/min',
+            vspm: 'Visão/min',
+            kp: 'Part. Abates',
+            tankiness: 'Tankiness',
+            objPart: 'Part. Obj.',
+            globalObj: 'Obj. Globais'
+        };
+
+        // Calculate ratios and points for each metric defined in the lane config
+        Object.entries(laneWeights).forEach(([key, weight]) => {
+            let pVal = 0;
+            let oVal = 0;
+            let ratio = 0;
+
+            // Map values based on key
+            if (key === 'cspm') { pVal = playerStats.cspm; oVal = oppMetrics.cs ? oppMetrics.cs / durationMin : 0; }
+            else if (key === 'dpm') { pVal = playerStats.dpm; oVal = oppMetrics.damage ? oppMetrics.damage / durationMin : 0; }
+            else if (key === 'gpm') { pVal = playerStats.gpm; oVal = oppMetrics.gold ? oppMetrics.gold / durationMin : 0; }
+            else if (key === 'vspm') { pVal = playerStats.vspm; oVal = oppMetrics.vision ? oppMetrics.vision / durationMin : 0; }
+            else if (key === 'kp') { pVal = metrics.kp || 0; oVal = oppMetrics.kp || 0; }
+            else if (key === 'tankiness') { pVal = metrics.tankiness || 0; oVal = oppMetrics.tankiness || 0; }
+            else if (key === 'objPart' || key === 'globalObj') { pVal = metrics.objTotal || 0; oVal = oppMetrics.objTotal || 0; } // Simplified for now
+
+            // Avoid div/0
+            if (oVal === 0) ratio = pVal > 0 ? 1.3 : 1.0;
+            else ratio = pVal / oVal;
+
+            // Calculate Points
+            let points = metricScore(ratio, weight);
+
+            // Defeat Logic Check: "Só métricas com ratio > 1.0 pontuam"
+            if (!score.isVictory && ratio <= 1.0) points = 0;
+
+            // Format for display
+            performanceMetrics.push({
+                label: labels[key] || key,
+                key: key,
+                player: key === 'kp' ? (pVal * 100).toFixed(0) + '%' : pVal.toFixed(1),
+                opponent: key === 'kp' ? (oVal * 100).toFixed(0) + '%' : oVal.toFixed(1),
+                points: Math.floor(points),
+                maxPoints: weight
+            });
+        });
+
+        // Calculate Objectives (Fixed weights logic for now)
+        // Torres (10), Drag (10), Baron (5)
+        const objList = [
+            { key: 'turrets', label: 'Torres', p: playerStats.turrets, o: oppMetrics.turrets || 0, w: 10 },
+            { key: 'dragons', label: 'Dragões', p: playerStats.dragons, o: oppMetrics.dragons || 0, w: 10 },
+            { key: 'barons', label: 'Barões', p: playerStats.barons, o: oppMetrics.barons || 0, w: 5 },
+        ];
+
+        const objMetrics = objList.map(item => {
+            let ratio = 0;
+            if (item.o === 0) ratio = item.p > 0 ? 1.3 : 1.0;
+            else ratio = item.p / item.o;
+
+            let pts = metricScore(ratio, item.w);
+            if (!score.isVictory && ratio <= 1.0) pts = 0;
+
+            return {
+                label: item.label,
+                player: item.p,
+                opponent: item.o,
+                points: Math.floor(pts),
+                maxPoints: item.w
+            };
+        });
+
+        // Discipline
+        let discPoints = 0;
+        const pDeaths = score.deaths;
+        const oDeaths = oppMetrics.deaths || 0;
+        if (pDeaths < oDeaths) discPoints = 10;
+        else if (pDeaths === oDeaths) discPoints = 5;
+
+        // Cap logic for Defeat handled in engine, but here we show "Potential" points
+        // Note: If defeat, the breakdown score is capped, but per-item points might sum up higher. 
+        // We'll show the raw calculated points per item to be honest about "what you earned" vs "what you got kept".
+
         return {
             matchId: score.matchId,
             outcome: score.isVictory ? 'Victory' : 'Defeat',
@@ -1647,6 +2213,7 @@ export class RankingService {
                 championId: score.championId,
                 kda: `${score.kills}/${score.deaths}/${score.assists}`,
                 score: score.matchScore,
+                stats: playerStats,
                 breakdown: {
                     performance: score.performanceScore,
                     objectives: score.objectivesScore,
@@ -1658,6 +2225,15 @@ export class RankingService {
                 championName: oppName,
                 championId: oppId,
                 stats: oppMetrics
+            },
+
+            comparisons: {
+                performance: performanceMetrics,
+                objectives: objMetrics,
+                discipline: [
+                    { label: 'Mortes', player: score.deaths, opponent: oppMetrics.deaths || 0, invert: true, points: discPoints, maxPoints: 10 },
+                ],
+                lane: lane
             },
 
             insight: "Analysis ready."

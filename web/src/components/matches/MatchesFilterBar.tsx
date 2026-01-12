@@ -49,7 +49,7 @@ export function MatchesFilterBar({ players, filters, onChange }: Props) {
             </div>
 
             {/* 2. Lane Selector */}
-            <div className="flex bg-black/40 p-1.5 rounded-xl border border-white/5">
+            <div className="flex flex-wrap justify-center bg-black/40 p-1.5 rounded-xl border border-white/5">
                 <button
                     onClick={() => onChange('lane', '')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filters.lane === ''

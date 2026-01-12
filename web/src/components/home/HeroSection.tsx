@@ -31,7 +31,7 @@ export function HeroSection({ player, pdlDelta }: HeroSectionProps) {
     const skinName = player.skin?.name && player.skin.name !== 'default' ? player.skin.name : player.mainChampion?.name;
 
     return (
-        <section ref={ref} className="relative w-full max-w-[100%] md:max-w-[1400px] min-h-[500px] h-[85vh] lg:h-[800px] rounded-[1.5rem] md:rounded-[2.5rem] overflow-hidden mb-12 md:mb-16 group shadow-2xl shadow-emerald-900/10 mx-auto">
+        <section ref={ref} className="relative w-full max-w-[100%] md:max-w-[1400px] min-h-[400px] h-[75vh] lg:h-[800px] rounded-[1.5rem] md:rounded-[2.5rem] overflow-hidden mb-12 md:mb-16 group shadow-2xl shadow-emerald-900/10 mx-auto">
 
             {/* PARALLAX BACKGROUND */}
             <motion.div
@@ -53,25 +53,19 @@ export function HeroSection({ player, pdlDelta }: HeroSectionProps) {
             </motion.div>
 
             {/* CONTENT LAYER */}
-            <div className="absolute inset-0 z-10 flex flex-col justify-end p-8 md:p-16 lg:p-24 pb-24">
+            <div className="absolute inset-0 z-10 flex flex-col justify-end p-6 md:p-16 lg:p-24 pb-20 md:pb-24">
 
                 {/* Top Badge */}
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5, duration: 0.8 }}
-                    className="absolute top-8 left-8 md:top-12 md:left-12 flex items-center gap-3"
+                    className="absolute top-6 left-6 md:top-12 md:left-12 flex items-center gap-3"
                 >
-                    <div className="flex items-center gap-2 bg-yellow-500/20 backdrop-blur-xl border border-yellow-500/40 px-4 py-2 rounded-full shadow-[0_0_30px_rgba(234,179,8,0.2)]">
-                        <Crown className="w-4 h-4 text-yellow-400 fill-yellow-400 animate-pulse" />
-                        <span className="text-yellow-100 font-bold uppercase tracking-widest text-xs">Rei da Comunidade</span>
+                    <div className="flex items-center gap-2 bg-yellow-500/20 backdrop-blur-xl border border-yellow-500/40 px-3 py-1.5 md:px-4 md:py-2 rounded-full shadow-[0_0_30px_rgba(234,179,8,0.2)]">
+                        <Crown className="w-3 h-3 md:w-4 md:h-4 text-yellow-400 fill-yellow-400 animate-pulse" />
+                        <span className="text-yellow-100 font-bold uppercase tracking-widest text-[10px] md:text-xs">Rei da Comunidade</span>
                     </div>
-                    {skinName && (
-                        <div className="flex items-center gap-2 bg-white/5 backdrop-blur-md border border-white/10 px-4 py-2 rounded-full">
-                            <Sparkles className="w-3 h-3 text-purple-400" />
-                            <span className="text-gray-300 font-bold uppercase tracking-widest text-xs">{skinName}</span>
-                        </div>
-                    )}
                 </motion.div>
 
                 {/* Main Player Info */}
@@ -81,13 +75,14 @@ export function HeroSection({ player, pdlDelta }: HeroSectionProps) {
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.8, ease: "easeOut" }}
                     >
-                        <h2 className="text-emerald-500 font-[family-name:var(--font-outfit)] font-bold text-xl md:text-2xl tracking-[0.2em] uppercase mb-2 flex items-center gap-3">
-                            <span className='w-8 h-[2px] bg-emerald-500 inline-block shadow-[0_0_8px_rgba(16,185,129,0.8)]' />
-                            Top 1 Regional
+                        <h2 className="text-emerald-500 font-[family-name:var(--font-outfit)] font-bold text-sm md:text-xl md:text-2xl tracking-[0.2em] uppercase mb-2 flex items-center gap-3">
+                            <span className='w-6 h-[2px] md:w-8 bg-emerald-500 inline-block shadow-[0_0_8px_rgba(16,185,129,0.8)]' />
+                            O DONO DO SERVER
                         </h2>
-                        <h1 className="text-7xl md:text-9xl font-[family-name:var(--font-outfit)] font-black text-white tracking-tighter uppercase leading-[0.85] mb-6 drop-shadow-xl mix-blend-lighten">
+                        {/* Dynamic Font Scaling for Nickname */}
+                        <h1 className={`${player.gameName.length > 12 ? (player.gameName.length > 16 ? 'text-3xl md:text-5xl lg:text-6xl' : 'text-4xl md:text-6xl lg:text-7xl') : 'text-5xl md:text-7xl lg:text-8xl'} font-[family-name:var(--font-outfit)] font-black text-white tracking-tighter uppercase leading-[0.9] mb-4 md:mb-6 drop-shadow-xl mix-blend-lighten whitespace-nowrap`}>
                             {player.gameName}
-                            <span className="text-3xl md:text-4xl text-zinc-500 ml-2 font-medium tracking-normal normal-case opacity-60">#{player.tagLine}</span>
+                            <span className="block md:inline text-2xl md:text-3xl md:text-4xl text-zinc-500 md:ml-2 font-medium tracking-normal normal-case opacity-60">#{player.tagLine}</span>
                         </h1>
                     </motion.div>
 

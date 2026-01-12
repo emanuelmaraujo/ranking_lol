@@ -414,3 +414,18 @@ export async function getGlobalHighlights(period: 'DAILY' | 'WEEKLY' | 'MONTHLY'
     if (!res.ok) throw new Error('Failed to fetch highlights');
     return res.json();
 }
+
+/**
+ * Community Feats & Duos
+ */
+export async function getCommunityFeats(period: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'GENERAL', queue: 'SOLO' | 'FLEX') {
+    const res = await fetch(`${API_URL}/insights/feats?period=${period}&queue=${queue}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error('Failed to fetch feats');
+    return res.json();
+}
+
+export async function getCommunityDuos(period: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'GENERAL', queue: 'SOLO' | 'FLEX') {
+    const res = await fetch(`${API_URL}/insights/duos?period=${period}&queue=${queue}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error('Failed to fetch duos');
+    return res.json();
+}
