@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { getPlayerHistory, getPlayerInsights, getPdlEvolution, PlayerHistory, PlayerInsights, MatchHistoryEntry, PdlEvolution } from "@/lib/api";
 import { PdlChart } from "@/components/PdlChart";
 import { MatchHistoryGrid } from "@/components/MatchHistoryGrid";
-import { MatchDetailsSidePanel } from "@/components/MatchDetailsSidePanel";
+import { MatchDetailsModal } from "@/components/MatchDetailsModal";
 import { PlayerHeader } from "@/components/PlayerHeader";
 import { StatsGrid } from "@/components/StatsGrid";
 import { WeeklyReportCard } from "@/components/WeeklyReportCard";
@@ -250,8 +250,10 @@ export default function PlayerProfile({ params }: { params: Promise<{ puuid: str
             </div>
 
             {/* Side Panel Overlay */}
-            <MatchDetailsSidePanel
+            {/* Match Details Modal */}
+            <MatchDetailsModal
                 match={selectedMatch}
+                puuid={puuid}
                 onClose={() => setSelectedMatch(null)}
             />
         </div>

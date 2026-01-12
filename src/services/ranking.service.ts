@@ -1350,4 +1350,317 @@ export class RankingService {
             moedaBronze
         };
     }
+
+    /**
+     * Get Global Matches (with filters)
+     */
+    async getGlobalMatches(page: number = 1, limit: number = 20, filters?: { playerPuuid?: string, lane?: string, queue?: string }) {
+        const skip = (page - 1) * limit;
+        const where: any = {};
+
+        if (filters?.playerPuuid && filters.playerPuuid !== 'ALL') {
+            where.playerId = filters.playerPuuid;
+        }
+
+        if (filters?.lane && filters.lane !== 'ALL') {
+            where.lane = filters.lane;
+        }
+
+        if (filters?.queue && filters.queue !== 'ALL') {
+            where.queueType = filters.queue;
+        }
+
+        const matches = await prisma.matchScore.findMany({
+            where,
+            orderBy: { match: { gameCreation: 'desc' } }, // Sort by game time
+            skip,
+            take: limit,
+            include: {
+                match: true, // Get duration/creation
+                player: {
+                    select: {
+                        gameName: true,
+                        tagLine: true,
+                        profileIconId: true,
+                        tier: true,
+                        rank: true
+                    }
+                }
+            }
+        });
+
+        const total = await prisma.matchScore.count({ where });
+
+        // Transform to MatchHistoryEntry style (consistent with profile)
+        const history = matches.map(m => ({
+            matchId: m.matchId,
+            date: m.match.gameCreation.toISOString(), // Use match time
+            duration: m.match.gameDuration,
+            championId: m.championId,
+            championName: m.championName,
+            lane: m.lane,
+            isVictory: m.isVictory,
+            kda: `${m.kills}/${m.deaths}/${m.assists}`,
+            kills: m.kills,
+            deaths: m.deaths,
+            assists: m.assists,
+            score: m.matchScore,
+            gold: (m.metrics as any).goldEarned || 0,
+            cs: (m.metrics as any).totalMinions || 0,
+            damage: (m.metrics as any).totalDamage || 0,
+
+            performanceScore: m.performanceScore,
+            objectivesScore: m.objectivesScore,
+            disciplineScore: m.disciplineScore,
+
+            // Extra info for Global View
+            playerName: m.player.gameName,
+            playerTag: m.player.tagLine,
+            puuid: m.playerId,
+            playerIcon: m.player.profileIconId,
+            playerTier: m.player.tier,
+
+            queueType: m.queueType
+        }));
+
+        return {
+            data: history,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit)
+            }
+        };
+    }
+
+    /**
+     * Get Global Highlights (Daily & Weekly)
+     * - Most Games
+     * - Best Win Rate (min games)
+     */
+    /**
+     * Get Global Highlights (Filtered by Period and Queue)
+     */
+    async getGlobalHighlights(period: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'ALL' = 'DAILY', queue: string = 'SOLO') {
+        const now = new Date();
+        let startDate: Date;
+
+        if (period === 'ALL') {
+            startDate = new Date(0); // Beginning of time
+        } else if (period === 'MONTHLY') {
+            startDate = this.getStartDateForPeriod('MONTHLY');
+        } else if (period === 'WEEKLY') {
+            startDate = this.getStartDateForPeriod('WEEKLY');
+        } else {
+            // DAILY: Strict Brazil Time (UTC-3) 00:00 - 23:59
+            // 1. Shift current UTC time to Brazil Time (-3h)
+            const brazilTime = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+            // 2. Floor to midnight
+            brazilTime.setHours(0, 0, 0, 0);
+            // 3. Shift back to UTC (+3h) to get the query timestamp
+            startDate = new Date(brazilTime.getTime() + 3 * 60 * 60 * 1000);
+        }
+
+        // 2. Fetch Scores
+        const where: any = {
+            match: { gameCreation: { gte: startDate } }
+        };
+        if (queue && queue !== 'ALL') {
+            // If queue is specific
+            where.queueType = queue;
+        }
+
+        const scores = await prisma.matchScore.findMany({
+            where,
+            include: {
+                player: { select: { gameName: true, tagLine: true, profileIconId: true } },
+                match: true
+            }
+        });
+
+        const playerStats: Record<string, { games: number, wins: number, player: any }> = {};
+
+        // 3. Init Stats
+        let mostGames = { value: 0, player: null as any };
+        let bestWr = { value: 0, games: 0, player: null as any };
+        let worstWr = { value: 100, games: 0, player: null as any };
+        let highestDmg = { value: 0, champion: '', player: null as any, matchId: '' };
+        let longestGame = { value: 0, champion: '', player: null as any, matchId: '' };
+        let mostPlayedChamp: Record<string, number> = {};
+
+        // 4. Process Matches
+        scores.forEach(s => {
+            // Player Aggregates
+            if (!playerStats[s.playerId]) {
+                playerStats[s.playerId] = { games: 0, wins: 0, player: s.player };
+            }
+            playerStats[s.playerId].games++;
+            if (s.isVictory) playerStats[s.playerId].wins++;
+
+            // Global Highs
+            const dmg = (s.metrics as any).totalDamage || 0;
+            if (dmg > highestDmg.value) {
+                highestDmg = { value: dmg, champion: s.championName, player: s.player, matchId: s.matchId };
+            }
+
+            const duration = s.match.gameDuration;
+            if (duration > longestGame.value) {
+                longestGame = { value: duration, champion: s.championName, player: s.player, matchId: s.matchId };
+            }
+
+            // Champion Frequency
+            mostPlayedChamp[s.championName] = (mostPlayedChamp[s.championName] || 0) + 1;
+        });
+
+        // 5. Calculate Final Stats (WR etc)
+        // Min games for WR consideration -> > 1
+        const minGamesForWr = 2;
+
+        Object.values(playerStats).forEach(stat => {
+            // Most Games
+            if (stat.games > mostGames.value) {
+                mostGames = { value: stat.games, player: stat.player };
+            }
+
+            // WR Stats
+            if (stat.games >= minGamesForWr) {
+                const wr = (stat.wins / stat.games) * 100;
+
+                // Best
+                if (wr > bestWr.value || (wr === bestWr.value && stat.games > bestWr.games)) {
+                    bestWr = { value: wr, games: stat.games, player: stat.player };
+                }
+
+                // Worst
+                if (wr < worstWr.value || (wr === worstWr.value && stat.games > worstWr.games)) {
+                    worstWr = { value: wr, games: stat.games, player: stat.player };
+                }
+            }
+        });
+
+        // Most Played Champion
+        let popularChamp = { name: '', count: 0 };
+        Object.entries(mostPlayedChamp).forEach(([name, count]) => {
+            if (count > popularChamp.count) {
+                popularChamp = { name, count };
+            }
+        });
+
+        return {
+            period,
+            queue,
+            mostGames,
+            bestWr: bestWr.games > 0 ? bestWr : null,
+            worstWr: worstWr.games > 0 ? worstWr : null,
+            highestDmg: highestDmg.value > 0 ? highestDmg : null,
+            longestGame: longestGame.value > 0 ? longestGame : null,
+            popularChamp: popularChamp.count > 0 ? popularChamp : null
+        };
+    }
+
+    /**
+     * Get Match Details with Lazy Enriched Caching
+     * Returns: Player Stats, Opponent Stats, and Comparison
+     */
+    async getMatchDetailsWithCache(matchId: string, puuid: string) {
+        // 1. Check DB for Score + Opponent Info
+        const score = await prisma.matchScore.findUnique({
+            where: { playerId_matchId: { playerId: puuid, matchId } },
+            include: { match: true }
+        });
+
+        if (!score) return null; // Should not happen if history lists it
+
+        // 2. Check if Cache Hit (Opponent info exists)
+        if (score.opponentChampionName && score.opponentMetrics) {
+            console.log(`[Cache] Hit for Match ${matchId}`);
+            // Return cached format
+            return this.formatMatchDetailResponse(score, score.opponentChampionName, score.opponentMetrics as any, score.opponentChampionId || 0);
+        }
+
+        // 3. Cache Miss: Fetch from Riot
+        console.log(`[Cache] Miss for Match ${matchId}. Fetching from Riot...`);
+        try {
+            const matchDto = await this.riotService!.getMatchDetails(matchId);
+
+            // 4. Identify Participants
+            const playerPart = matchDto.info.participants.find((p: any) => p.puuid === puuid);
+            if (!playerPart) throw new Error('Player not found in match');
+
+            // Logic reused from engine (simplified here or imported)
+            const getOpponent = (p: any, all: any[]) => {
+                return all.find(x => x.teamPosition === p.teamPosition && x.teamId !== p.teamId) || null;
+            };
+
+            const opponentPart = getOpponent(playerPart, matchDto.info.participants);
+
+            // 5. Build Metrics & Update DB
+            let oppName = 'Unknown';
+            let oppId = 0;
+            let oppMetrics = {};
+
+            if (opponentPart) {
+                oppName = opponentPart.championName;
+                oppId = opponentPart.championId;
+
+                // Calculate essential metrics for comparison
+                const duration = matchDto.info.gameDuration;
+                oppMetrics = {
+                    kda: `${opponentPart.kills}/${opponentPart.deaths}/${opponentPart.assists}`,
+                    cs: (opponentPart.totalMinionsKilled || 0) + (opponentPart.neutralMinionsKilled || 0),
+                    gold: opponentPart.goldEarned || 0,
+                    damage: opponentPart.totalDamageDealtToChampions || 0,
+                    vision: opponentPart.visionScore || 0,
+                };
+
+                // SAVE TO DB
+                await prisma.matchScore.update({
+                    where: { id: score.id },
+                    data: {
+                        opponentChampionName: oppName,
+                        opponentChampionId: oppId,
+                        opponentMetrics: oppMetrics
+                    }
+                });
+                console.log(`[Cache] Saved Opponent Info for ${matchId}`);
+            }
+
+            return this.formatMatchDetailResponse(score, oppName, oppMetrics, oppId);
+
+        } catch (error) {
+            console.error('Failed to enrich match details', error);
+            // Fallback: Return what we have
+            return this.formatMatchDetailResponse(score, 'Unknown', {}, 0);
+        }
+    }
+
+    private formatMatchDetailResponse(score: any, oppName: string, oppMetrics: any, oppId: number) {
+        return {
+            matchId: score.matchId,
+            outcome: score.isVictory ? 'Victory' : 'Defeat',
+            date: score.match.gameCreation,
+            duration: score.match.gameDuration,
+
+            player: {
+                championName: score.championName,
+                championId: score.championId,
+                kda: `${score.kills}/${score.deaths}/${score.assists}`,
+                score: score.matchScore,
+                breakdown: {
+                    performance: score.performanceScore,
+                    objectives: score.objectivesScore,
+                    discipline: score.disciplineScore
+                }
+            },
+
+            opponent: {
+                championName: oppName,
+                championId: oppId,
+                stats: oppMetrics
+            },
+
+            insight: "Analysis ready."
+        };
+    }
 }

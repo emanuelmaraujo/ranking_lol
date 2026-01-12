@@ -108,6 +108,11 @@ model MatchScore {
   lane             String
   championId       Int?
   championName     String?
+
+  // Lazy Cache Opponent Info
+  opponentChampionId   Int?
+  opponentChampionName String?
+  opponentMetrics      Json?
   
   // Stats
   kills            Int      @default(0)

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getPdlGainRanking, PdlGainEntry } from "@/lib/api";
+import { getDateRange } from "@/lib/date-utils";
 import { useQueue } from "@/contexts/QueueContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { TrendingUp, Calendar, RefreshCcw } from "lucide-react";
@@ -22,19 +23,13 @@ export default function PdlRankingPage() {
             setLoading(true);
             try {
                 // Calculate Start Date based on Period
-                let startDate: string | undefined = undefined;
+                let startDate: Date | string | undefined = undefined;
                 const now = new Date();
 
                 if (period === 'WEEK') {
-                    // Last 7 days
-                    const d = new Date(now);
-                    d.setDate(d.getDate() - 7);
-                    startDate = d.toISOString();
+                    startDate = getDateRange('WEEKLY')?.start;
                 } else if (period === 'MONTH') {
-                    // Last 30 days
-                    const d = new Date(now);
-                    d.setDate(d.getDate() - 30);
-                    startDate = d.toISOString();
+                    startDate = getDateRange('MONTHLY')?.start;
                 }
 
                 // For SEASON, we don't send startDate, API handles it (since beginning of time/season)

@@ -99,6 +99,11 @@ function MatchRow({ match, theme, index, onClick }: { match: MatchHistoryEntry, 
                     </div>
                 </div>
                 <div className="min-w-0">
+                    {match.playerName && (
+                        <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mb-0.5 truncate">
+                            {match.playerName}
+                        </div>
+                    )}
                     <div className={`text-sm font-[family-name:var(--font-outfit)] font-bold ${theme.colors.text} truncate`}>{match.championName}</div>
                     <div className="text-[10px] text-zinc-500 font-mono tracking-wide">{laneConfig.label}</div>
                 </div>
@@ -149,7 +154,7 @@ function MatchRow({ match, theme, index, onClick }: { match: MatchHistoryEntry, 
                     {isWin ? 'Win' : 'Loss'}
                 </div>
                 <div className="text-[10px] font-[family-name:var(--font-outfit)] font-medium text-zinc-500 flex items-center justify-end gap-1">
-                    {timeAgo(match.date)}
+                    {timeAgo(match.date)} • {new Date(match.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                 </div>
             </div>
         </motion.div>

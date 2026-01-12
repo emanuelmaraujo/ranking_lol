@@ -123,6 +123,11 @@ export interface MatchHistoryEntry {
     gold: number;
     damage: number;
     duration: number; // Seconds
+    // Global View Extras
+    playerName?: string;
+    playerTag?: string;
+    playerIcon?: number;
+    puuid?: string; // Player PUUID for identification
 }
 
 export interface PlayerInsights {
@@ -173,10 +178,11 @@ export async function getRankingByElo(queue: 'SOLO' | 'FLEX', tier: string, limi
     return res.json();
 }
 
-export async function getPdlGainRanking(queue: 'SOLO' | 'FLEX' = 'SOLO', limit: number = 20, startDate?: string): Promise<PdlGainEntry[]> {
+export async function getPdlGainRanking(queue: 'SOLO' | 'FLEX' = 'SOLO', limit: number = 20, startDate?: Date | string): Promise<PdlGainEntry[]> {
     let url = `${API_URL}/ranking/pdl-gain?queue=${queue}&limit=${limit}`;
     if (startDate) {
-        url += `&startDate=${startDate}`;
+        const val = startDate instanceof Date ? startDate.toISOString() : startDate;
+        url += `&startDate=${val}`;
     }
     const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to fetch PDL ranking');
@@ -385,5 +391,26 @@ export async function initPlayers(players: { gameName: string; tagLine: string }
         body: JSON.stringify({ players })
     });
     if (!res.ok) throw new Error('Failed to initialize players');
+    return res.json();
+}
+
+/**
+ * Global Matches & Highlights
+ */
+export async function getGlobalMatches(page: number = 1, limit: number = 20, filters?: { player?: string, lane?: string, queue?: string, champion?: string }) {
+    let url = `${API_URL}/matches?page=${page}&limit=${limit}`;
+    if (filters?.player) url += `&player=${filters.player}`;
+    if (filters?.lane) url += `&lane=${filters.lane}`;
+    if (filters?.queue) url += `&queue=${filters.queue}`;
+    if (filters?.champion) url += `&champion=${filters.champion}`;
+
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('Failed to fetch global matches');
+    return res.json();
+}
+
+export async function getGlobalHighlights(period: 'DAILY' | 'WEEKLY' | 'MONTHLY' = 'DAILY', queue: string = 'SOLO') {
+    const res = await fetch(`${API_URL}/matches/highlights?period=${period}&queue=${queue}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error('Failed to fetch highlights');
     return res.json();
 }

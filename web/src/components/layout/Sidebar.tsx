@@ -5,7 +5,7 @@ import { getSystemStatus } from "@/lib/api";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Trophy, TrendingUp, Users, Home, Activity, X, Info } from "lucide-react";
+import { Trophy, TrendingUp, Users, Home, Activity, X, Info, Swords } from "lucide-react";
 
 interface SidebarProps {
     onClose?: () => void;
@@ -14,6 +14,7 @@ interface SidebarProps {
 const MENU_ITEMS = [
     { label: "Geral", href: "/", icon: Home },
     { label: "Ranking", href: "/ranking/elo", icon: Trophy },
+    { label: "Partidas Gerais", href: "/matches", icon: Swords },
     { label: "Ganho de PDL", href: "/ranking/pdl", icon: TrendingUp },
     { label: "Jogadores", href: "/players", icon: Users },
     { label: "Insights", href: "/insights", icon: Activity },

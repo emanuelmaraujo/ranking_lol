@@ -85,10 +85,10 @@ Cada função tem foco diferente para somar os 60 pontos de performance:
 *   **SUP**: Visão(25), KP(15), Part. Objetivos(10), Gold(5), Dano(5)
 
 ### 3. Regras de Derrota (Teto 40)
-*   **KP Mínimo**: Se seu Kill Participation for < 35%, o score é **0**.
+*   **KP Mínimo**: Se seu Kill Participation for < 15%, o score é **0** (Filtro Anti-AFK).
 *   **Teto**: Máximo de 40 pontos.
-*   **Performance**: Pontua no máximo 20 (apenas métricas onde você venceu o oponente).
-*   **Objetivos**: Pontua no máximo 10.
+*   **Performance**: Pontua no máximo 20 (apenas métricas onde ratio > 1.0).
+*   **Objetivos**: Pontua no máximo 10 (apenas métricas onde ratio > 1.0).
 *   **Disciplina**: Pontua no máximo 10.
 
 ### 4. Exclusões

@@ -60,7 +60,7 @@ export default function Home() {
         const [rankingRes, highlightsRes, trendsRes, fameRes, shameRes] = await Promise.allSettled([
           getSeasonRanking(currentQueue, 5),
           getHighlights(currentQueue, getDateRange('WEEKLY')),
-          getPdlGainRanking(currentQueue, 50),
+          getPdlGainRanking(currentQueue, 50, getDateRange('WEEKLY')?.start),
           getHallOfFame(currentQueue, getDateRange('WEEKLY')),
           getHallOfShame(currentQueue, getDateRange('WEEKLY'))
         ]);
@@ -70,7 +70,7 @@ export default function Home() {
         const otherQueue = currentQueue === 'SOLO' ? 'FLEX' : 'SOLO';
 
         try {
-          otherQueueTrends = await getPdlGainRanking(otherQueue, 30);
+          otherQueueTrends = await getPdlGainRanking(otherQueue, 30, getDateRange('WEEKLY')?.start);
         } catch (e) {
           console.warn(`Failed to fetch ${otherQueue} trends`, e);
         }

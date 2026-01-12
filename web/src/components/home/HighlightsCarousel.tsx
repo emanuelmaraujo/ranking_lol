@@ -259,9 +259,28 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
             value: 'ZICA', statLabel: 'IMPACTO', bgImage: getInsightBg(shame.moedaBronze)
         });
 
-        // 4. CALCULATED STORIES
-        // A. HOT STREAK - Generic
-        const hotStreakPlayer = ranking.filter(r => parseFloat(r.winRate) > 65 && r.gamesUsed > 10).sort((a, b) => parseInt(b.winRate) - parseInt(a.winRate))[0];
+        // ... (imports remain)
+
+        // 4. CALCULATED STORIES (Must be active this week -> Check if in trends OR highlights/fame/shame)
+        const activePuuids = new Set(trends.map(t => t.puuid));
+
+        // Add Highlights/Fame/Shame players to active set
+        const addActive = (obj: any) => {
+            if (!obj) return;
+            Object.values(obj).forEach((p: any) => {
+                if (p && p.puuid) activePuuids.add(p.puuid);
+            });
+        };
+        addActive(highlights);
+        addActive(fame);
+        addActive(shame);
+
+        // A. HOT STREAK - Generic (Active Only)
+        const hotStreakPlayer = ranking
+            .filter(r => activePuuids.has(r.puuid)) // MUST BE ACTIVE
+            .filter(r => parseFloat(r.winRate) > 65 && r.gamesUsed > 10)
+            .sort((a, b) => parseInt(b.winRate) - parseInt(a.winRate))[0];
+
         if (hotStreakPlayer) {
             list.push({
                 id: `streak-${hotStreakPlayer.puuid}`, type: 'FLAME',
@@ -272,9 +291,13 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
             });
         }
 
-        // B. SMURF DETECTED - Generic
-        const smurf = ranking.find(r => parseFloat(r.winRate) > 75 && r.gamesUsed > 15);
-        if (smurf && smurf.puuid !== hotStreakPlayer?.puuid) {
+        // B. SMURF DETECTED - Generic (Active Only)
+        // Also ensure we don't duplicate Hot Streak player
+        const smurf = ranking
+            .filter(r => activePuuids.has(r.puuid)) // MUST BE ACTIVE
+            .find(r => parseFloat(r.winRate) > 75 && r.gamesUsed > 15 && r.puuid !== hotStreakPlayer?.puuid);
+
+        if (smurf) {
             list.push({
                 id: `smurf-${smurf.puuid}`, type: 'PURPLE',
                 player: { gameName: smurf.gameName, profileIconId: smurf.profileIconId, championName: smurf.mainChampion?.name },
@@ -284,7 +307,7 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
             });
         }
 
-        // C. GRINDER (Many Games) - Generic (unless OTP)
+        // C. GRINDER (Many Games) - Already from highlights (weekly), so safe.
         if (highlights?.mostActive) {
             const h = highlights.mostActive;
             list.push({
@@ -296,8 +319,11 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
             });
         }
 
-        // D. VETERANO (Consistent Games) - Generic
-        const veteran = ranking.find(r => r.gamesUsed > 50 && r.puuid !== highlights?.mostActive?.puuid);
+        // D. VETERANO (Consistent Games) - Generic (Active Only)
+        const veteran = ranking
+            .filter(r => activePuuids.has(r.puuid)) // MUST BE ACTIVE
+            .find(r => r.gamesUsed > 50 && r.puuid !== highlights?.mostActive?.puuid);
+
         if (veteran) {
             list.push({
                 id: `vet-${veteran.puuid}`, type: 'BLUE',
@@ -308,7 +334,7 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
             });
         }
 
-        // E. OTP (One Trick Pony) - SPECIFIC (This is about the champion)
+        // E. OTP (One Trick Pony) - From Highlights (Safe)
         if (highlights?.mono) {
             const h = highlights.mono;
             list.push({
@@ -320,7 +346,7 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
             });
         }
 
-        // F. TOP GAINER (PDL) - Generic
+        // F. TOP GAINER (PDL) - From Trends (Safe)
         const topGainer = trends.sort((a, b) => b.pdlGain - a.pdlGain)[0];
         if (topGainer && topGainer.pdlGain > 60) {
             const fullGainer = getPlayerDetails(topGainer.puuid);
@@ -333,8 +359,10 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
             });
         }
 
-        // G. AZARADO - Generic
-        const azarado = ranking.find(r => r.avgScore > 80 && parseFloat(r.winRate) < 45);
+        // G, H, I - Generic (Active Only)
+        const azarado = ranking
+            .filter(r => activePuuids.has(r.puuid))
+            .find(r => r.avgScore > 80 && parseFloat(r.winRate) < 45);
         if (azarado) {
             list.push({
                 id: `badluck-${azarado.puuid}`, type: 'GRAY',
@@ -345,8 +373,9 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
             });
         }
 
-        // H. CARREGADO - Generic
-        const carregado = ranking.find(r => r.avgScore < 50 && parseFloat(r.winRate) > 60);
+        const carregado = ranking
+            .filter(r => activePuuids.has(r.puuid))
+            .find(r => r.avgScore < 50 && parseFloat(r.winRate) > 60);
         if (carregado) {
             list.push({
                 id: `carried-${carregado.puuid}`, type: 'PINK',
@@ -357,8 +386,9 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
             });
         }
 
-        // I. COIN FLIP - Generic
-        const coinFlip = ranking.find(r => parseFloat(r.winRate) >= 49 && parseFloat(r.winRate) <= 51 && r.gamesUsed > 20);
+        const coinFlip = ranking
+            .filter(r => activePuuids.has(r.puuid))
+            .find(r => parseFloat(r.winRate) >= 49 && parseFloat(r.winRate) <= 51 && r.gamesUsed > 20);
         if (coinFlip) {
             list.push({
                 id: `coinflip-${coinFlip.puuid}`, type: 'GRAY',
@@ -372,6 +402,7 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
         setCards(list.filter(c => c.player && c.player.gameName));
     }, [fame, shame, trends, ranking, highlights]);
 
+    // ... (Scroll logic stays same)
     // Auto-Scroll Logic
     const [isPaused, setIsPaused] = useState(false);
     const x = useRef(0);
@@ -447,6 +478,8 @@ export function HighlightsCarousel({ fame, shame, trends, ranking = [], highligh
     // INFINITE SCROLL SIMULATION
     const infiniteCards = Array(GENERATED_STORY_COUNT).fill(cards).flat();
 
+    if (cards.length === 0) return null;
+
     return (
         <section className="mb-24 relative w-full overflow-hidden">
             <div className="flex items-center justify-between mb-8 px-1">
@@ -511,7 +544,7 @@ function StoryCardComponent({ card }: { card: StoryCard }) {
     return (
         <motion.div
             className={`
-                relative w-[75vw] md:w-[320px] h-[520px] rounded-[2rem] overflow-hidden 
+                relative w-[70vw] md:w-[280px] h-[480px] rounded-[2rem] overflow-hidden 
                 border ${theme.border} bg-[#0a0a0a] ${theme.shadow} shadow-2xl
                 group select-none flex-shrink-0 transition-transform duration-300 hover:-translate-y-1
             `}
@@ -550,50 +583,50 @@ function StoryCardComponent({ card }: { card: StoryCard }) {
             </div>
 
             {/* Bottom Content - Centered */}
-            <div className="absolute bottom-0 w-full p-8 z-20 flex flex-col items-center text-center">
+            <div className="absolute bottom-0 w-full p-6 z-20 flex flex-col items-center text-center">
 
                 {/* Stat Highlight (Floating) */}
                 {card.value && (
-                    <div className="mb-6 flex flex-col items-center animate-in fade-in slide-in-from-bottom-4 duration-700">
-                        <span className={`text-3xl font-black italic tracking-tighter ${theme.accent} drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]`}>
+                    <div className="mb-4 flex flex-col items-center animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <span className={`text-2xl font-black italic tracking-tighter ${theme.accent} drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]`}>
                             {card.value}
                         </span>
-                        <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">
+                        <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest mt-1">
                             {card.statLabel}
                         </span>
                     </div>
                 )}
 
                 {/* Player Identity */}
-                <div className="flex flex-col items-center gap-4 mb-8 group-hover:-translate-y-2 transition-transform duration-500">
+                <div className="flex flex-col items-center gap-3 mb-6 group-hover:-translate-y-2 transition-transform duration-500">
                     <div className={`
-                        relative w-24 h-24 rounded-full p-1.5 
-                        bg-gradient-to-br ${theme.bg} border-4 border-white/20 shadow-[0_0_30px_rgba(0,0,0,0.5)]
+                        relative w-20 h-20 rounded-full p-1 
+                        bg-gradient-to-br ${theme.bg} border-2 border-white/20 shadow-[0_0_30px_rgba(0,0,0,0.5)]
                         group-hover:shadow-[0_0_50px_rgba(255,255,255,0.2)] transition-shadow duration-700
                     `}>
                         <img src={fallbackProfileIcon} className="w-full h-full rounded-full object-cover" alt="" />
                         {/* Rank Circle Indicator (Optional Polish) - Adjusted for bigger size */}
-                        <div className={`absolute bottom-0 right-1 w-6 h-6 rounded-full border-4 border-black ${theme.bg.split(' ')[0].replace('from-', 'bg-')}`} />
+                        <div className={`absolute bottom-0 right-1 w-5 h-5 rounded-full border-2 border-black ${theme.bg.split(' ')[0].replace('from-', 'bg-')}`} />
                     </div>
                     <div>
-                        <div className="text-white font-[family-name:var(--font-outfit)] font-black text-3xl leading-none tracking-tight drop-shadow-xl">
+                        <div className="text-white font-[family-name:var(--font-outfit)] font-black text-2xl leading-none tracking-tight drop-shadow-xl truncate max-w-[200px]">
                             {card.player.gameName}
                         </div>
-                        <div className={`text-xs font-bold ${theme.accent} uppercase tracking-[0.25em] mt-2`}>
+                        <div className={`text-[10px] font-bold ${theme.accent} uppercase tracking-[0.25em] mt-1`}>
                             {card.player.championName || 'Invocador'}
                         </div>
                     </div>
                 </div>
 
                 {/* Separator */}
-                <div className="w-16 h-1.5 bg-white/10 rounded-full mb-6" />
+                <div className="w-12 h-1 bg-white/10 rounded-full mb-4" />
 
                 {/* Main Message */}
                 <div className="w-full relative">
-                    <h2 className="text-3xl font-[family-name:var(--font-outfit)] font-black text-white leading-[0.9] italic uppercase tracking-tighter drop-shadow-2xl mb-3">
+                    <h2 className="text-2xl font-[family-name:var(--font-outfit)] font-black text-white leading-[0.9] italic uppercase tracking-tighter drop-shadow-2xl mb-2">
                         {card.message}
                     </h2>
-                    <p className="text-base text-gray-200 font-medium leading-relaxed px-4 opacity-90">
+                    <p className="text-sm text-gray-200 font-medium leading-relaxed px-2 opacity-90 line-clamp-2">
                         {card.subMessage}
                     </p>
                 </div>

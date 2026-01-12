@@ -57,7 +57,9 @@ export function MatchHistoryTable({ history, onSelectMatch }: Props) {
                                     </div>
                                     <div>
                                         <div className="font-bold text-white text-lg leading-none">{match.championName}</div>
-                                        <div className="text-xs text-gray-400 mt-1">{new Date(match.date).toLocaleDateString()}</div>
+                                        <div className="text-xs text-gray-400 mt-1">
+                                            {new Date(match.date).toLocaleDateString()} • {new Date(match.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                        </div>
                                     </div>
                                 </div>
 
@@ -174,7 +176,8 @@ export function MatchHistoryTable({ history, onSelectMatch }: Props) {
 
                                     {/* Date */}
                                     <td className="p-4 text-right text-[var(--color-text-secondary)] text-xs font-mono">
-                                        {new Date(match.date).toLocaleDateString()}
+                                        <div>{new Date(match.date).toLocaleDateString()}</div>
+                                        <div className="text-[10px] text-gray-500">{new Date(match.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
                                     </td>
                                 </tr>
                             );

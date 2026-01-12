@@ -290,4 +290,48 @@ export async function rankingRoutes(fastify: FastifyInstance) {
             reply.status(500).send({ error: 'Internal Server Error' });
         }
     });
+
+    // 10. Global Matches & Highlights
+    interface GlobalMatchesQuery { page?: number; limit?: number; player?: string; lane?: string; queue?: string; }
+    fastify.get<{ Querystring: GlobalMatchesQuery }>('/api/matches', async (request, reply) => {
+        const { page = 1, limit = 20, player, lane, queue } = request.query;
+        const p = Number(page) || 1;
+        const l = Number(limit) || 20;
+
+        try {
+            return await rankingService.getGlobalMatches(p, l, { playerPuuid: player, lane, queue });
+        } catch (error) {
+            console.error(error);
+            reply.status(500).send({ error: 'Internal Server Error' });
+        }
+    });
+
+    // 11. Match Details (Lazy Enrichment)
+    interface MatchDetailsParams { matchId: string; }
+    interface MatchDetailsQuery { puuid: string; }
+    fastify.get<{ Params: MatchDetailsParams, Querystring: MatchDetailsQuery }>('/api/matches/:matchId/details', async (request, reply) => {
+        const { matchId } = request.params;
+        const { puuid } = request.query;
+
+        if (!puuid) return reply.status(400).send({ error: 'Missing puuid' });
+
+        try {
+            const data = await rankingService.getMatchDetailsWithCache(matchId, puuid);
+            if (!data) return reply.status(404).send({ error: 'Match/Player not found' });
+            return data;
+        } catch (error) {
+            console.error(error);
+            reply.status(500).send({ error: 'Internal Server Error' });
+        }
+    });
+
+
+    fastify.get('/api/matches/highlights', async (request, reply) => {
+        try {
+            return await rankingService.getGlobalHighlights();
+        } catch (error) {
+            console.error(error);
+            reply.status(500).send({ error: 'Internal Server Error' });
+        }
+    });
 }
