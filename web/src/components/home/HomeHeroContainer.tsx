@@ -115,7 +115,7 @@ export function HomeHeroContainer() {
                             className="w-full h-full"
                         >
                             {topPlayer ? (
-                                <HeroSection player={topPlayer} pdlDelta={period === 'WEEKLY' ? 0 : null} /> // pdlDelta dummy
+                                <HeroSection player={topPlayer} pdlDelta={period === 'WEEKLY' ? 0 : null} period={period} /> // pdlDelta dummy
                             ) : ( // Fallback or Loading State handled inside HeroSection usually, but here we control it
                                 <div className="flex h-[50vh] items-center justify-center text-zinc-500">
                                     Nenhum Rei encontrado... o trono está vazio.

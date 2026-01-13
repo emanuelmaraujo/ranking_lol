@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { getHighlights, PeriodHighlights, getHallOfFame, getHallOfShame, HallOfFameData, HallOfShameData } from "@/lib/api";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { Card } from "@/components/ui/Card";
-import { Trophy, Skull, Flame, TrendingUp, Swords, Calendar, Eye, Timer, Target, Layers, User, Crown, AlertTriangle } from "lucide-react";
+import { Trophy, Skull, Flame, TrendingUp, Swords, Calendar, Eye, Timer, Target, Layers, User, Crown, AlertTriangle, Ban } from "lucide-react";
 import { motion } from "framer-motion";
 import { getDateRange } from "@/lib/date-utils";
 
@@ -212,21 +212,21 @@ function TabSystem({ data, fame, shame }: { data: PeriodHighlights, fame: HallOf
                         animate={{ opacity: 1, x: 0 }}
                         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
                     >
-                        {fame.pentaKing && <HighlightCard title="Rei do Pentakill" icon={<Swords className="w-5 h-5 text-yellow-500" />} player={fame.pentaKing} color="border-yellow-500/20 bg-yellow-500/5" delay={0} extraInfo={`${fame.pentaKing.value} Pentas`} />}
-                        {fame.stomper && <HighlightCard title="Estompador" icon={<Swords className="w-5 h-5 text-blue-400" />} player={fame.stomper} color="border-blue-500/20 bg-blue-500/5" delay={0.1} extraInfo={fame.stomper?.championName} />}
-                        {fame.farmMachine && <HighlightCard title="Farm Machine" icon={<Target className="w-5 h-5 text-emerald-400" />} player={fame.farmMachine} color="border-emerald-500/20 bg-emerald-500/5" delay={0.2} extraInfo={fame.farmMachine?.championName} />}
-                        {fame.objectiveKing && <HighlightCard title="Rei dos Objetivos" icon={<Target className="w-5 h-5 text-orange-400" />} player={fame.objectiveKing} color="border-orange-500/20 bg-orange-500/5" delay={0.3} />}
-                        {fame.damageEfficient && <HighlightCard title="Sniper (Eficiência)" icon={<Flame className="w-5 h-5 text-red-400" />} player={fame.damageEfficient} color="border-red-500/20 bg-red-500/5" delay={0.4} extraInfo={fame.damageEfficient?.championName} />}
-                        {fame.consistencyMachine && <HighlightCard title="A Máquina" icon={<Layers className="w-5 h-5 text-indigo-400" />} player={fame.consistencyMachine} color="border-indigo-500/20 bg-indigo-500/5" delay={0.5} />}
+                        {fame.pentakilleiro && <HighlightCard title="Pentakilleiro" icon={<Swords className="w-5 h-5 text-yellow-500" />} player={fame.pentakilleiro} color="border-yellow-500/20 bg-yellow-500/5" delay={0} extraInfo={`${fame.pentakilleiro.value} Pentas`} />}
+                        {fame.espanco && <HighlightCard title="Espanco" icon={<Swords className="w-5 h-5 text-blue-400" />} player={fame.espanco} color="border-blue-500/20 bg-blue-500/5" delay={0.1} extraInfo={fame.espanco?.championName} />}
+                        {fame.ministroEconomia && <HighlightCard title="Ministro da Economia" icon={<Target className="w-5 h-5 text-emerald-400" />} player={fame.ministroEconomia} color="border-emerald-500/20 bg-emerald-500/5" delay={0.2} extraInfo={fame.ministroEconomia?.championName} />}
+                        {fame.senhorDosDragoes && <HighlightCard title="Senhor dos Dragões" icon={<Target className="w-5 h-5 text-orange-400" />} player={fame.senhorDosDragoes} color="border-orange-500/20 bg-orange-500/5" delay={0.3} />}
+                        {fame.sniper && <HighlightCard title="Sniper" icon={<Flame className="w-5 h-5 text-red-400" />} player={fame.sniper} color="border-red-500/20 bg-red-500/5" delay={0.4} extraInfo={fame.sniper?.championName} />}
+                        {fame.robo && <HighlightCard title="O Robô" icon={<Layers className="w-5 h-5 text-indigo-400" />} player={fame.robo} color="border-indigo-500/20 bg-indigo-500/5" delay={0.5} />}
 
                         {/* New FAME Insights */}
-                        {fame.torreDemolidora && <HighlightCard title="Torre Demolidora" icon={<Crown className="w-5 h-5 text-yellow-600" />} player={fame.torreDemolidora} color="border-yellow-600/20 bg-yellow-600/5" delay={0.6} extraInfo={fame.torreDemolidora?.detail} />}
-                        {fame.soloClutch && <HighlightCard title="Solo Clutch" icon={<Swords className="w-5 h-5 text-pink-500" />} player={fame.soloClutch} color="border-pink-500/20 bg-pink-500/5" delay={0.7} />}
-                        {fame.costasSeguras && <HighlightCard title="Costas Seguras" icon={<Layers className="w-5 h-5 text-cyan-400" />} player={fame.costasSeguras} color="border-cyan-500/20 bg-cyan-500/5" delay={0.8} extraInfo={fame.costasSeguras?.detail} />}
-                        {fame.earlyTyrant && <HighlightCard title="Early Game Tyrant" icon={<Timer className="w-5 h-5 text-amber-500" />} player={fame.earlyTyrant} color="border-amber-500/20 bg-amber-500/5" delay={0.9} />}
-                        {fame.lateDemon && <HighlightCard title="Late Game Demon" icon={<Skull className="w-5 h-5 text-purple-600" />} player={fame.lateDemon} color="border-purple-600/20 bg-purple-600/5" delay={1.0} />}
-                        {fame.jungleGod && <HighlightCard title="Jungle God" icon={<Eye className="w-5 h-5 text-green-500" />} player={fame.jungleGod} color="border-green-500/20 bg-green-500/5" delay={1.1} />}
-                        {fame.macroPerfect && <HighlightCard title="Macro Perfeito" icon={<Target className="w-5 h-5 text-blue-300" />} player={fame.macroPerfect} color="border-blue-300/20 bg-blue-300/5" delay={1.2} />}
+                        {fame.demolidor && <HighlightCard title="O Demolidor" icon={<Crown className="w-5 h-5 text-yellow-600" />} player={fame.demolidor} color="border-yellow-600/20 bg-yellow-600/5" delay={0.6} extraInfo={fame.demolidor?.detail} />}
+                        {fame.x1Raiz && <HighlightCard title="Rei do X1" icon={<Swords className="w-5 h-5 text-pink-500" />} player={fame.x1Raiz} color="border-pink-500/20 bg-pink-500/5" delay={0.7} />}
+                        {fame.anjoDaGuarda && <HighlightCard title="Anjo da Guarda" icon={<Layers className="w-5 h-5 text-cyan-400" />} player={fame.anjoDaGuarda} color="border-cyan-500/20 bg-cyan-500/5" delay={0.8} extraInfo={fame.anjoDaGuarda?.detail} />}
+                        {fame.donodoEarly && <HighlightCard title="Dono do Early" icon={<Timer className="w-5 h-5 text-amber-500" />} player={fame.donodoEarly} color="border-amber-500/20 bg-amber-500/5" delay={0.9} />}
+                        {fame.escalada && <HighlightCard title="A Escalada" icon={<Skull className="w-5 h-5 text-purple-600" />} player={fame.escalada} color="border-purple-600/20 bg-purple-600/5" delay={1.0} />}
+                        {fame.reiDaSelva && <HighlightCard title="Rei da Selva" icon={<Eye className="w-5 h-5 text-green-500" />} player={fame.reiDaSelva} color="border-green-500/20 bg-green-500/5" delay={1.1} />}
+                        {fame.gigaChad && <HighlightCard title="Giga Chad" icon={<Target className="w-5 h-5 text-blue-300" />} player={fame.gigaChad} color="border-blue-300/20 bg-blue-300/5" delay={1.2} />}
                     </motion.div>
                 )}
 
@@ -236,17 +236,18 @@ function TabSystem({ data, fame, shame }: { data: PeriodHighlights, fame: HallOf
                         animate={{ opacity: 1, x: 0 }}
                         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
                     >
-                        {shame.lowDmg && <HighlightCard title="Acariciador" icon={<Skull className="w-5 h-5 text-gray-400" />} player={shame.lowDmg} color="border-gray-500/20 bg-gray-500/5" delay={0} extraInfo={shame.lowDmg?.championName} />}
+                        {shame.pacifista && <HighlightCard title="Pacifista (Dano Moral)" icon={<Ban className="w-5 h-5 text-red-400" />} player={shame.pacifista} color="border-red-500/20 bg-red-500/5" delay={0} extraInfo={shame.pacifista?.championName} />}
                         {shame.alface && <HighlightCard title="Mão de Alface" icon={<AlertTriangle className="w-5 h-5 text-green-400" />} player={shame.alface} color="border-green-500/20 bg-green-500/5" delay={0.1} extraInfo={shame.alface?.detail} />}
-                        {shame.farmLimbo && <HighlightCard title="Farm no Limbo" icon={<TrendingUp className="w-5 h-5 text-gray-500" />} player={shame.farmLimbo} color="border-gray-500/20 bg-gray-500/5" delay={0.2} extraInfo={shame.farmLimbo?.detail} />}
-                        {shame.visionNegligente && <HighlightCard title="Cego em tiroteio" icon={<Eye className="w-5 h-5 text-red-500" />} player={shame.visionNegligente} color="border-red-500/20 bg-red-500/5" delay={0.3} extraInfo={shame.visionNegligente?.championName} />}
-                        {shame.sumido && <HighlightCard title="Exilado (Low KP)" icon={<User className="w-5 h-5 text-purple-400" />} player={shame.sumido} color="border-purple-500/20 bg-purple-500/5" delay={0.4} />}
+                        {shame.agronomo && <HighlightCard title="O Agrônomo" icon={<TrendingUp className="w-5 h-5 text-emerald-500" />} player={shame.agronomo} color="border-emerald-500/20 bg-emerald-500/5" delay={0.2} extraInfo={shame.agronomo?.detail} />}
+                        {shame.cego && <HighlightCard title="O Cego" icon={<Eye className="w-5 h-5 text-red-500" />} player={shame.cego} color="border-red-500/20 bg-red-500/5" delay={0.3} extraInfo={shame.cego?.championName} />}
+                        {shame.ilusionista && <HighlightCard title="O Ilusionista" icon={<User className="w-5 h-5 text-zinc-400" />} player={shame.ilusionista} color="border-zinc-500/20 bg-zinc-500/5" delay={0.4} />}
 
                         {/* New SHAME Insights */}
+                        {shame.finado && <HighlightCard title="O Finado" icon={<Skull className="w-5 h-5 text-red-600" />} player={shame.finado} color="border-red-600/20 bg-red-600/5" delay={0.45} />}
                         {shame.sonecaBaron && <HighlightCard title="Soneca do Baron" icon={<Timer className="w-5 h-5 text-blue-900" />} player={shame.sonecaBaron} color="border-blue-900/20 bg-blue-900/5" delay={0.5} />}
-                        {shame.killCollector && <HighlightCard title="Kill Collector" icon={<Swords className="w-5 h-5 text-red-700" />} player={shame.killCollector} color="border-red-700/20 bg-red-700/5" delay={0.6} extraInfo={shame.killCollector?.detail} />}
+                        {shame.mataFofo && <HighlightCard title="Zé Kills" icon={<Swords className="w-5 h-5 text-red-700" />} player={shame.mataFofo} color="border-red-700/20 bg-red-700/5" delay={0.6} extraInfo={shame.mataFofo?.detail} />}
                         {shame.throwingStation && <HighlightCard title="Throwing Station" icon={<TrendingUp className="w-5 h-5 text-orange-700" />} player={shame.throwingStation} color="border-orange-700/20 bg-orange-700/5" delay={0.7} extraInfo={shame.throwingStation?.detail} />}
-                        {shame.soloDoador && <HighlightCard title="Solo Doador" icon={<Skull className="w-5 h-5 text-red-600" />} player={shame.soloDoador} color="border-red-600/20 bg-red-600/5" delay={0.8} extraInfo={shame.soloDoador?.detail} />}
+                        {shame.ifood && <HighlightCard title="iFood" icon={<Skull className="w-5 h-5 text-red-600" />} player={shame.ifood} color="border-red-600/20 bg-red-600/5" delay={0.8} extraInfo={shame.ifood?.detail} />}
                         {shame.telaPreta && <HighlightCard title="Tela Preta" icon={<Skull className="w-5 h-5 text-gray-600" />} player={shame.telaPreta} color="border-gray-600/20 bg-gray-600/5" delay={0.9} />}
                         {shame.moedaBronze && <HighlightCard title="Moeda de Bronze" icon={<AlertTriangle className="w-5 h-5 text-yellow-700" />} player={shame.moedaBronze} color="border-yellow-700/20 bg-yellow-700/5" delay={1.0} />}
                     </motion.div>

@@ -6,6 +6,7 @@ import { X, Swords, Target, AlertCircle, Sparkles, Trophy, Skull, Info } from "l
 import { motion, AnimatePresence } from "framer-motion";
 import { DDRAGON_VERSION } from "@/lib/constants";
 import { normalizeChampionName } from "@/lib/utils";
+import { formatMatchDate } from "@/lib/date-utils";
 
 interface MatchDetailsModalProps {
     match: MatchHistoryEntry | null;
@@ -128,7 +129,7 @@ export function MatchDetailsModal({ match, puuid, onClose }: MatchDetailsModalPr
                                             {isWin ? 'VITÓRIA' : 'DERROTA'}
                                         </span>
                                         <span className="text-xs text-zinc-500 font-medium">
-                                            {new Date(match.date).toLocaleDateString()} • {match.lane} • {(match.duration / 60).toFixed(0)}m
+                                            {formatMatchDate(match.date)} • {match.lane} • {(match.duration / 60).toFixed(0)}m
                                         </span>
                                     </div>
                                 </div>

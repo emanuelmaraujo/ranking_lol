@@ -4,6 +4,7 @@ import { MatchHistoryEntry } from '@/lib/api';
 import { Swords, Shield, Crosshair, Zap, Trees, Grip } from 'lucide-react';
 import { DDRAGON_VERSION } from '@/lib/constants';
 import { normalizeChampionName } from '@/lib/utils';
+import { formatMatchDate, formatMatchTime } from '@/lib/date-utils';
 
 interface Props {
     history: MatchHistoryEntry[];
@@ -58,7 +59,7 @@ export function MatchHistoryTable({ history, onSelectMatch }: Props) {
                                     <div>
                                         <div className="font-bold text-white text-lg leading-none">{match.championName}</div>
                                         <div className="text-xs text-gray-400 mt-1">
-                                            {new Date(match.date).toLocaleDateString()} • {new Date(match.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                            {formatMatchDate(match.date)} • {formatMatchTime(match.date)}
                                         </div>
                                     </div>
                                 </div>
@@ -176,8 +177,8 @@ export function MatchHistoryTable({ history, onSelectMatch }: Props) {
 
                                     {/* Date */}
                                     <td className="p-4 text-right text-[var(--color-text-secondary)] text-xs font-mono">
-                                        <div>{new Date(match.date).toLocaleDateString()}</div>
-                                        <div className="text-[10px] text-gray-500">{new Date(match.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+                                        <div>{formatMatchDate(match.date)}</div>
+                                        <div className="text-[10px] text-gray-500">{formatMatchTime(match.date)}</div>
                                     </td>
                                 </tr>
                             );

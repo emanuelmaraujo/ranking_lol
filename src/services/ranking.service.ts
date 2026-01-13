@@ -969,8 +969,12 @@ export class RankingService {
                 queueType: queueType,
                 match: { gameCreation: { gte: start, lte: end } }
             } as any,
-            include: { player: true, match: true }
+            include: { player: true, match: true },
+            orderBy: { match: { gameCreation: 'asc' } }
         });
+
+        // Track Win Streaks
+        const currentStreaks: Record<string, { count: number, start: Date, matchId: string, champion: string }> = {};
 
         // 1. Aggregations (Pentas, Consistency)
         const playerStats: Record<string, {
@@ -981,54 +985,76 @@ export class RankingService {
         }> = {};
 
         // 2. Single Game Records
-        let stomper: any = null;
-        let stomperKda = -1;
 
-        let farmMachine: any = null;
+
+        // Variables for Single Game Records (Renamed)
+        let espanco: any = null; // stomper
+        let espancoKda = -1;
+
+        let ministroEconomia: any = null; // farmMachine
         let farmRecord = -1;
 
-        let objectiveKing: any = null;
+        let senhorDosDragoes: any = null; // objectiveKing
         let objRecord = -1;
 
-        let laneBully: any = null; // Avg Diff @ 15 (Requires aggregation, but let's do single game max for "Bully" or Avg? User said 'Role Filter' implies Avg)
-        // User Spec: "Lane Bully... formula: avg(gold_diff_15 + xp_diff_15)" -> Aggregation needed.
-        // Let's execute aggregation loop first.
-
-        let damageEfficient: any = null;
+        let sniper: any = null; // damageEfficient
         let dmgEffRecord = -1;
 
-        let teamfightMaestro: any = null;
-        let tfRecord = -1;
-
-        // New Insights
-        let torreDemolidora: any = null;
+        let demolidor: any = null; // torreDemolidora
         let torreRecord = -1;
 
-        let roamerMestre: any = null;
-        let roamRecord = -1;
-
-        let soloClutch: any = null;
+        let x1Raiz: any = null; // soloClutch
         let soloRecord = -1;
 
-        let costasSeguras: any = null;
+        let anjoDaGuarda: any = null; // costasSeguras
         let costasRecord = -1;
 
-        let earlyTyrant: any = null;
-        let earlyRecord = -1;
+        let donodoEarly: any = null; // earlyTyrant
+        let earlyRecord = -9999;
 
-        let lateDemon: any = null;
+        let escalada: any = null; // lateDemon
         let lateRecord = -1;
 
-        let jungleGod: any = null;
+        let reiDaSelva: any = null; // jungleGod
         let jungleRecord = -1;
 
-        let macroPerfect: any = null;
+        let gigaChad: any = null; // macroPerfect
         let macroRecord = -1;
+
+        // Unique Feats list
+        const uniqueFeats: any[] = [];
 
         // Populate Aggregations & Single Game Checks
         for (const s of scores) {
             const metrics = s.metrics as any;
             const challenges = metrics?.challenges || {};
+            const pid = s.playerId;
+
+            // --- Win Streak Logic ---
+            if (s.isVictory) {
+                if (!currentStreaks[pid]) {
+                    currentStreaks[pid] = { count: 0, start: s.match.gameCreation, matchId: s.matchId, champion: s.championName };
+                }
+                currentStreaks[pid].count++;
+                currentStreaks[pid].matchId = s.matchId; // Update to latest match in streak
+                currentStreaks[pid].champion = s.championName;
+            } else {
+                // Check if broken streak was epic
+                if (currentStreaks[pid] && currentStreaks[pid].count >= 3) {
+                    uniqueFeats.push({
+                        ...s.player,
+                        value: currentStreaks[pid].count,
+                        label: 'O Imparável',
+                        type: 'WIN_STREAK',
+                        matchId: currentStreaks[pid].matchId,
+                        championName: currentStreaks[pid].champion,
+                        date: currentStreaks[pid].start,
+                        detail: 'Sequência de Vitórias'
+                    });
+                }
+                // Reset
+                currentStreaks[pid] = { count: 0, start: new Date(), matchId: '', champion: '' };
+            }
 
             if (!playerStats[s.playerId]) {
                 playerStats[s.playerId] = { player: s.player, pentaCount: 0, scores: [], games: 0 };
@@ -1036,102 +1062,127 @@ export class RankingService {
             const pStats = playerStats[s.playerId];
             pStats.games++;
             pStats.scores.push(s.matchScore);
-            pStats.pentaCount += Number(metrics?.pentaKills || 0);
+            const pentas = Number(metrics?.pentaKills || 0);
+            pStats.pentaCount += pentas;
+
+            // --- Unique Feats Detection (Labels Updated) ---
+            if (pentas > 0) {
+                // Push one per penta occurrence
+                for (let i = 0; i < pentas; i++) {
+                    uniqueFeats.push({ ...s.player, type: 'PENTA', label: 'A Lenda Viva', matchId: s.matchId, champion: s.championName, value: 5, date: s.match.gameCreation });
+                }
+            }
+
+            // Quadra (Only if NO penta)
+            const quadras = Number(metrics?.quadraKills || 0);
+            if (quadras > 0 && pentas === 0) {
+                for (let i = 0; i < quadras; i++) {
+                    uniqueFeats.push({ ...s.player, type: 'QUADRA', label: 'Quase Lenda', matchId: s.matchId, champion: s.championName, value: 4, date: s.match.gameCreation });
+                }
+            }
+
+            if (s.isVictory && s.deaths === 0 && s.kills >= 5) {
+                uniqueFeats.push({ ...s.player, type: 'PERFECT', label: 'Intocável', matchId: s.matchId, champion: s.championName, value: `${s.kills}/${s.deaths}/${s.assists}`, date: s.match.gameCreation });
+            }
+
+            const gd15 = Number(challenges.goldDiffAt15 || 0);
+            if (s.isVictory && gd15 < -2000) {
+                uniqueFeats.push({ ...s.player, type: 'COMEBACK', label: 'O Milagre', matchId: s.matchId, champion: s.championName, value: Math.abs(gd15).toFixed(0), detail: 'Ouro -2k @15', date: s.match.gameCreation });
+            }
+
+            if (s.isVictory && s.match.gameDuration < 1200) {
+                uniqueFeats.push({ ...s.player, type: 'STOMP', label: 'Speedrun', matchId: s.matchId, champion: s.championName, value: `${(s.match.gameDuration / 60).toFixed(0)} min`, date: s.match.gameCreation });
+            }
+
 
             // --- Single Game Records ---
 
-            // Stomper (KDA)
+            // Espanco (KDA)
             const kda = s.deaths === 0 ? (s.kills + s.assists) : (s.kills + s.assists) / s.deaths;
-            if (kda > stomperKda) {
-                stomperKda = kda;
-                stomper = { ...s.player, value: kda.toFixed(2), label: 'KDA', matchId: s.matchId, champion: s.championName };
+            if (kda > espancoKda) {
+                espancoKda = kda;
+                espanco = { ...s.player, value: kda.toFixed(2), label: 'Espanco (KDA)', matchId: s.matchId, champion: s.championName };
             }
 
-            // Farm Machine (CSPM)
+            // Ministro da Economia (CSPM)
             const cspm = Number(metrics?.cspm || 0);
-            if (cspm > farmRecord && s.lane !== 'JUNGLE' && s.lane !== 'UTILITY') { // Exclude Jg/Sup
+            if (cspm > farmRecord && s.lane !== 'JUNGLE' && s.lane !== 'UTILITY') {
                 farmRecord = cspm;
-                farmMachine = { ...s.player, value: cspm.toFixed(1), label: 'CS/Min', matchId: s.matchId, champion: s.championName };
+                ministroEconomia = { ...s.player, value: cspm.toFixed(1), label: 'Ministro da Economia', matchId: s.matchId, champion: s.championName, unit: 'CS/min' };
             }
 
-            // Damage Efficient (Dmg / Gold) - Single Game Peak? Or Avg? User didn't specify. Assuming Single Game Peak is cooler for "Hall of Fame".
-            // Actually "Damage Efficient" implies playstyle. Let's do Avg if possible, or Peak.
-            // Formula: total_damage / total_gold.
+            // Sniper (Dmg / Gold) 
             const gold = metrics?.goldEarned || 1;
             const dmg = metrics?.totalDamage || 0;
             const efficiency = dmg / gold;
             if (efficiency > dmgEffRecord && s.lane !== 'UTILITY') {
                 dmgEffRecord = efficiency;
-                damageEfficient = { ...s.player, value: efficiency.toFixed(2), label: 'Dano/Ouro', matchId: s.matchId, champion: s.championName };
+                sniper = { ...s.player, value: efficiency.toFixed(2), label: 'Sniper (Dano/Ouro)', matchId: s.matchId, champion: s.championName };
             }
 
-            // Objective King (Single Game Weighted)
-            // (dragons*3 + barons*5 + herald*2 + towers*1)
+            // Senhor dos Dragões (Objectives)
             const wObj = (challenges.dragonTakedowns || 0) * 3 + (challenges.baronTakedowns || 0) * 5 + (challenges.riftHeraldTakedowns || 0) * 2 + (challenges.turretTakedowns || 0);
             if (wObj > objRecord) {
                 objRecord = wObj;
-                objectiveKing = { ...s.player, value: wObj, label: 'Pts Objetivos', matchId: s.matchId, champion: s.championName };
+                senhorDosDragoes = { ...s.player, value: wObj, label: 'Senhor dos Dragões', matchId: s.matchId, champion: s.championName };
             }
 
-            // 1. Torre Demolidora (Plates * 150 + Dmg Buildings)
+            // O Demolidor (Plates * 150 + Dmg Buildings)
             const plates = Number(metrics?.turretPlatesTaken || 0);
             const dmgBuildings = Number(metrics?.damageDealtToBuildings || 0);
             const towerScore = (plates * 150) + dmgBuildings;
             if (towerScore > torreRecord) {
                 torreRecord = towerScore;
-                torreDemolidora = { ...s.player, value: Number(dmgBuildings).toLocaleString(), label: 'Dano a Torres', matchId: s.matchId, champion: s.championName, detail: `${plates} Placas` };
+                demolidor = { ...s.player, value: Number(dmgBuildings).toLocaleString(), label: 'O Demolidor', matchId: s.matchId, champion: s.championName, detail: `${plates} Placas` };
             }
 
-            // 2. SoloClutch (Solo Kills)
+            // Rei do X1 (Solo Kills)
             const solos = Number(challenges.soloKills || 0);
             if (solos > soloRecord) {
                 soloRecord = solos;
-                soloClutch = { ...s.player, value: solos, label: 'Solo Kills', matchId: s.matchId, champion: s.championName };
+                x1Raiz = { ...s.player, value: solos, label: 'Rei do X1', matchId: s.matchId, champion: s.championName, unit: 'Solos' };
             }
 
-            // 3. Costas Seguras (Sup/Tank)
+            // Anjo da Guarda (Sup/Tank)
             if (s.lane === 'UTILITY' || s.lane === 'JUNGLE') {
                 const saves = Number(challenges.saveAllyFromDeath || 0);
-                // Weight assists heavily
                 const guardScore = saves * 2 + s.assists;
                 if (guardScore > costasRecord) {
                     costasRecord = guardScore;
-                    costasSeguras = { ...s.player, value: saves, label: 'Salvos da Morte', matchId: s.matchId, champion: s.championName, detail: `${s.assists} Assists` };
+                    anjoDaGuarda = { ...s.player, value: saves, label: 'Anjo da Guarda', matchId: s.matchId, champion: s.championName, detail: `${s.assists} Assists` };
                 }
             }
 
-            // 4. Early Game Tyrant (Gold Diff @ 15)
-            const earlyDiff = (Number(challenges.goldDiffAt15 || 0)) + (Number(challenges.xpDiffAt15 || 0) * 2); // XP worth more early?
+            // Dono do Early (Gold Diff @ 15)
+            const earlyDiff = (Number(challenges.goldDiffAt15 || 0)) + (Number(challenges.xpDiffAt15 || 0) * 2);
             if (earlyDiff > earlyRecord) {
                 earlyRecord = earlyDiff;
-                earlyTyrant = { ...s.player, value: Number(challenges.goldDiffAt15 || 0).toFixed(0), label: 'Vantagem Ouro @15', matchId: s.matchId, champion: s.championName };
+                donodoEarly = { ...s.player, value: Number(challenges.goldDiffAt15 || 0).toFixed(0), label: 'Dono do Early', matchId: s.matchId, champion: s.championName };
             }
 
-            // 5. Late Game Demon (> 30 min, High KDA/Dmg)
-            if (s.match.gameDuration > 1800) { // 30min
-                const lateScore = (metrics.totalDamage || 0) + ((s.kills + s.assists) * 1000);
-                if (lateScore > lateRecord) {
-                    lateRecord = lateScore;
-                    lateDemon = { ...s.player, value: `${s.kills}/${s.deaths}/${s.assists}`, label: 'KDA Late Game', matchId: s.matchId, champion: s.championName };
-                }
+            // A Escalada (Longest Winning Game)
+            const duration = s.match.gameDuration;
+            if (s.isVictory && duration > lateRecord) {
+                lateRecord = duration;
+                escalada = { ...s.player, value: Math.floor(duration / 60) + ' min', label: 'A Escalada', matchId: s.matchId, champion: s.championName };
             }
 
-            // 6. Jungle Pathing God (JG Only)
+            // Rei da Selva (JG Only)
             if (s.lane === 'JUNGLE') {
-                const monsterKills = (Number(challenges.enemyJungleMonsterKills || 0)) + (Number(metrics.totalMinions || 0)); // totalMinions includes neutral
+                const monsterKills = (Number(challenges.enemyJungleMonsterKills || 0)) + (Number(metrics.totalMinions || 0));
                 const jgScore = monsterKills + (Number(metrics.visionScore || 0) * 2);
                 if (jgScore > jungleRecord) {
                     jungleRecord = jgScore;
-                    jungleGod = { ...s.player, value: monsterKills, label: 'Campos Farmados', matchId: s.matchId, champion: s.championName };
+                    reiDaSelva = { ...s.player, value: monsterKills, label: 'Rei da Selva', matchId: s.matchId, champion: s.championName, unit: 'Campos' };
                 }
             }
 
-            // 7. Macro Perfect (Low Kills, High Obj, Win)
+            // Giga Chad (Low Kills, High Obj, Win)
             if (s.isVictory && s.kills < 5) {
                 const macroScore = (challenges.turretTakedowns || 0) + (challenges.dragonTakedowns || 0) * 2;
                 if (macroScore > macroRecord) {
                     macroRecord = macroScore;
-                    macroPerfect = { ...s.player, value: macroScore, label: 'Objetivos (Low Kill)', matchId: s.matchId, champion: s.championName };
+                    gigaChad = { ...s.player, value: macroScore, label: 'Giga Chad', matchId: s.matchId, champion: s.championName, detail: 'Objetivos > Kills' };
                 }
             }
 
@@ -1141,19 +1192,12 @@ export class RankingService {
         const dayDiff = (end.getTime() - start.getTime()) / (1000 * 3600 * 24);
         const dynamicMin = dayDiff <= 7 ? 2 : (dayDiff <= 31 ? 5 : 10);
 
-        // --- Aggregated Records ---
-        // Lane Bully (Avg Diff @ 15) - Requires aggregating diffs.
-        // Since we don't have diffs in `scores` loop easily without extra query or complex type, skipping for now or approximating?
-        // Wait, I added `goldDiffAt15` to metrics in ingest. But only for NEW matches.
-        // Logic: Calculate Avg Diff for players.
-        const validStats = Object.values(playerStats).filter(s => s.games >= dynamicMin);
-
-        // Penta King (Sum)
+        // Pentakilleiro (Sum) - Aggregated
         const pentaWinner = Object.values(playerStats).sort((a, b) => b.pentaCount - a.pentaCount)[0];
-        const pentaKing = (pentaWinner && pentaWinner.pentaCount > 0) ? { ...pentaWinner.player, value: pentaWinner.pentaCount, label: 'Pentakills' } : null;
+        const pentakilleiro = (pentaWinner && pentaWinner.pentaCount > 0) ? { ...pentaWinner.player, value: pentaWinner.pentaCount, label: 'Pentakilleiro' } : null;
 
-        // Consistency Machine
-        let consistencyMachine: any = null;
+        // O Robô (Consistency)
+        let robo: any = null;
         const consistentCandidates = Object.values(playerStats).filter(s => s.games >= (dynamicMin + 1) && s.scores.length > 0);
 
         let lowestStdDev = 999;
@@ -1167,25 +1211,30 @@ export class RankingService {
             const std = calcStdDev(p.scores);
             if (std < lowestStdDev) {
                 lowestStdDev = std;
-                consistencyMachine = { ...p.player, value: std.toFixed(1), label: 'Desvio Padrão' };
+                robo = { ...p.player, value: std.toFixed(1), label: 'O Robô', detail: 'Desvio Padrão' };
             }
         }
 
+        // Sort Unique Feats by date desc
+        uniqueFeats.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
         return {
-            pentaKing,
-            stomper,
-            farmMachine,
-            objectiveKing,
-            damageEfficient,
-            consistencyMachine,
+            pentakilleiro,
+            espanco,
+            ministroEconomia,
+            senhorDosDragoes,
+            sniper,
+            robo,
             // New
-            torreDemolidora,
-            soloClutch,
-            costasSeguras,
-            earlyTyrant,
-            lateDemon,
-            jungleGod,
-            macroPerfect
+            demolidor,
+            x1Raiz,
+            anjoDaGuarda,
+            donodoEarly,
+            escalada,
+            reiDaSelva,
+            gigaChad,
+            // Unique
+            uniqueFeats
         };
     }
 
@@ -1204,38 +1253,32 @@ export class RankingService {
             include: { player: true, match: true }
         });
 
-        let lowDmg: any = null;
+        let pacifista: any = null; // Old lowDmg
         let minDmgRecord = 999999;
 
         let alface: any = null;
         let lowestConversion = 1.0;
 
-        let ghostFarmer: any = null; // Farmador Fantasma - This was replaced by farmLimbo
-        let ghostScore = -1; // Higher is worse
+        let agronomo: any = null; // Old farmLimbo
+        let limboScore = -1;
 
-        let visionNegligente: any = null;
+        let cego: any = null; // Old visionNegligente
         let lowestVision = 999;
 
-        let sumido: any = null;
+        let ilusionista: any = null; // Old sumido
         let lowestKp = 1.0;
 
         // New Hall of Shame
         let sonecaBaron: any = null; // Ignora objetivos
         let sonecaScore = -1;
 
-        let gpsQuebrado: any = null; // Anda mt faz pouco (Low KP/Dmg in long game)
-        let gpsScore = -1;
-
-        let killCollector: any = null; // Kills sem torre
+        let mataFofo: any = null; // Old killCollector
         let collectorScore = -1;
-
-        let farmLimbo: any = null; // CS alto, KP baixo, Derrota
-        let limboScore = -1;
 
         let throwingStation: any = null; // Gold Diff High -> Loss
         let throwScore = -1;
 
-        let soloDoador: any = null; // Mortes Solo
+        let ifood: any = null; // Old soloDoador
         let doadorScore = -1;
 
         let telaPreta: any = null; // Tempo morto
@@ -1244,8 +1287,11 @@ export class RankingService {
         let moedaBronze: any = null; // Score baixo + vitoria
         let bronzeScore = 999;
 
-        let dragonAlegria: any = null; // JG 0 Drakes vs 4
-        let dragonScore = -1;
+        let finado: any = null; // Max deaths
+        let maxDeathsRecord = 0;
+
+        // Champ Stats for 'A Carroca'
+        const champStats: Record<number, { count: number, wins: number, name: string }> = {};
 
         for (const s of scores) {
             const metrics = s.metrics as any;
@@ -1255,12 +1301,19 @@ export class RankingService {
             const totalKills = s.kills + s.assists + s.deaths; // loose approx of team kills if we don't have it? no metrics.kp is accurate.
             const kp = Number(metrics?.challenges?.killParticipation || 0);
 
-            // 1. Low Damage (Existing)
+            // Track Champ Stats
+            if (s.championId) {
+                if (!champStats[s.championId]) champStats[s.championId] = { count: 0, wins: 0, name: s.championName };
+                champStats[s.championId].count++;
+                if (s.isVictory) champStats[s.championId].wins++;
+            }
+
+            // 1. Pacifista (Low Damage)
             if (s.lane !== 'UTILITY' && s.match.gameDuration > 900) {
                 const dmg = Number(metrics?.totalDamage || 999999);
                 if (dmg < minDmgRecord && dmg > 0) {
                     minDmgRecord = dmg;
-                    lowDmg = { ...s.player, value: Number(dmg).toLocaleString(), label: 'Dano Total', matchId: s.matchId, champion: s.championName };
+                    pacifista = { ...s.player, value: Number(dmg).toLocaleString(), label: 'Dano Moral', matchId: s.matchId, champion: s.championName };
                 }
             }
 
@@ -1280,18 +1333,17 @@ export class RankingService {
                 }
             }
 
-            // 3. Vision Negligente (Supp/Jg only)
+            // 3. O Cego (Low Vision)
             if ((s.lane === 'UTILITY' || s.lane === 'JUNGLE') && s.match.gameDuration > 1200) {
                 const vs = Number(metrics?.visionScore || 999);
                 const vspm = vs / durationMin;
                 if (vspm < lowestVision && vspm > 0) { // >0 to avoid AFKs/Bugs
                     lowestVision = vspm;
-                    visionNegligente = { ...s.player, value: vspm.toFixed(2), label: 'Visão/Min', matchId: s.matchId, champion: s.championName };
+                    cego = { ...s.player, value: vspm.toFixed(2), label: 'Visão/Min', matchId: s.matchId, champion: s.championName };
                 }
             }
 
-            // 4. Farmador Fantasma (High CS, Low KP, Low Obj) - Legacy, folding into Farm No Limbo or keeping?
-            // Replacing with "Farm no Limbo" as requested (Farm decente + derrota por macro)
+            // 4. O Agrônomo (Simulador de Fazenda)
             if (['TOP', 'MIDDLE', 'BOTTOM'].includes(s.lane) && s.match.gameDuration > 1500 && !s.isVictory) {
                 const cspm = Number(metrics?.cspm || 0);
                 // Farm no Limbo: High CS, Low KP, Loss
@@ -1299,22 +1351,22 @@ export class RankingService {
                     const score = cspm * (1 - kp); // Higher is "better" candidate
                     if (score > limboScore) {
                         limboScore = score;
-                        farmLimbo = { ...s.player, value: `${cspm.toFixed(1)} CS/min`, label: 'Farm no Limbo', matchId: s.matchId, champion: s.championName, detail: `KP: ${(kp * 100).toFixed(0)}%` };
+                        agronomo = { ...s.player, value: `${cspm.toFixed(1)} CS/min`, label: 'Colheita Feliz', matchId: s.matchId, champion: s.championName, detail: `KP: ${(kp * 100).toFixed(0)}%` };
                     }
                 }
             }
 
-            // 5. Sumido -> Missão Solo Queue
+            // 5. O Ilusionista (Sumido)
             if (s.match.gameDuration > 1200) {
                 if (kp < lowestKp && kp >= 0) {
                     lowestKp = kp;
-                    sumido = { ...s.player, value: (kp * 100).toFixed(0) + '%', label: 'Participação (KP)', matchId: s.matchId, champion: s.championName };
+                    ilusionista = { ...s.player, value: (kp * 100).toFixed(0) + '%', label: 'Mágico do Sumiço', matchId: s.matchId, champion: s.championName };
                 }
             }
 
             // NEW SHAME INSIGHTS
 
-            // 6. Soneca do Baron (JG farming during obj?) - Hard to prove "during", but Low Obj Participation vs Game Duration
+            // 6. Soneca do Baron
             if (s.lane === 'JUNGLE' && s.match.gameDuration > 1500 && !s.isVictory) {
                 const objs = (challenges.dragonTakedowns || 0) + (challenges.baronTakedowns || 0);
                 if (objs === 0) {
@@ -1322,14 +1374,14 @@ export class RankingService {
                 }
             }
 
-            // 7. Kill Collector (Kills > 10, Tower Dmg < 1000, Loss)
+            // 7. Zé Kills (Mata Fofo)
             if (s.kills > 10 && !s.isVictory) {
                 const towerDmg = Number(metrics?.damageDealtToBuildings || 0);
                 if (towerDmg < 1000) {
                     // Higher kills = worse collector
                     if (s.kills > collectorScore) {
                         collectorScore = s.kills;
-                        killCollector = { ...s.player, value: s.kills, label: 'Kills sem Objetivo', matchId: s.matchId, champion: s.championName, detail: `${towerDmg.toFixed(0)} Dano Torre` };
+                        mataFofo = { ...s.player, value: s.kills, label: 'Kills sem Objetivo', matchId: s.matchId, champion: s.championName, detail: `${towerDmg.toFixed(0)} Dano Torre` };
                     }
                 }
             }
@@ -1343,18 +1395,16 @@ export class RankingService {
                 }
             }
 
-            // 9. Solo Doador (High Deaths, Low KP - "Entregando")
-            // Differs from "Sumido" (Low KP). This is "Feeder".
-            // Deaths > 8, KP < 30%
+            // 9. iFood (Doador)
             if (s.deaths > 8 && kp < 0.3) {
                 const ratio = s.deaths / (kp + 0.1);
                 if (ratio > doadorScore) {
                     doadorScore = ratio;
-                    soloDoador = { ...s.player, value: `${s.deaths} Mortes`, label: 'Solo Doador', matchId: s.matchId, champion: s.championName, detail: `KP: ${(kp * 100).toFixed(0)}%` };
+                    ifood = { ...s.player, value: `${s.deaths} Mortes`, label: 'Entrega Rápida', matchId: s.matchId, champion: s.championName, detail: `KP: ${(kp * 100).toFixed(0)}%` };
                 }
             }
 
-            // 10. Tempo de Tela Preta (> 20% dead)
+            // 10. Tempo de Tela Preta
             const timeDead = Number(metrics.totalTimeSpentDead || 0);
             if (timeDead > 0) {
                 const deadRatio = timeDead / s.match.gameDuration;
@@ -1364,12 +1414,18 @@ export class RankingService {
                 }
             }
 
-            // 11. Moeda de Bronze (Win with low score)
+            // 11. Moeda de Bronze
             if (s.isVictory && s.matchScore < 40) {
                 if (s.matchScore < bronzeScore) {
                     bronzeScore = s.matchScore;
                     moedaBronze = { ...s.player, value: s.matchScore, label: 'Carregado (Score)', matchId: s.matchId, champion: s.championName };
                 }
+            }
+
+            // 12. O Finado (Max Deaths)
+            if (s.deaths > maxDeathsRecord) {
+                maxDeathsRecord = s.deaths;
+                finado = { ...s.player, value: s.deaths, label: 'Simulador de Velório', matchId: s.matchId, champion: s.championName };
             }
 
         }
@@ -1384,20 +1440,39 @@ export class RankingService {
             pdlLoss: losers[0].pdlGain // Negative value
         } : null;
 
+        // 13. A Carroça (Worst Winrate Champ)
+        const dayDiff = (end.getTime() - start.getTime()) / (1000 * 3600 * 24);
+        const minGames = dayDiff <= 7 ? 2 : (dayDiff <= 31 ? 3 : 5); // Relaxed for shame
+
+        const champArray = Object.values(champStats);
+        const worstChamps = champArray.filter(c => c.count >= minGames).sort((a, b) => {
+            const wrA = a.wins / a.count;
+            const wrB = b.wins / b.count;
+            if (wrA === wrB) return b.count - a.count; // Breaks tie with most games played (Most consistent loss)
+            return wrA - wrB; // Lowest WR first
+        });
+        const aCarroca = (worstChamps.length > 0) ? {
+            championName: worstChamps[0].name,
+            count: worstChamps[0].count,
+            winrate: (worstChamps[0].wins / worstChamps[0].count) * 100
+        } : null;
+
         return {
             topLoser,
-            lowDmg,
+            aCarroca,
+            pacifista,
             alface,
-            visionNegligente,
-            sumido,
+            cego,
+            ilusionista,
             // New
             sonecaBaron,
-            killCollector,
-            farmLimbo,
+            mataFofo,
+            agronomo,
             throwingStation,
-            soloDoador,
+            ifood,
             telaPreta,
-            moedaBronze
+            moedaBronze,
+            finado
         };
     }
 
@@ -1998,21 +2073,33 @@ export class RankingService {
 
         // 2. Check if Cache Hit (Opponent info exists AND has new fields)
         const cachedOpp = score.opponentMetrics as any;
-        // Strict check: must have turrets, kp, and tankiness to be considered "fresh"
-        if (score.opponentChampionName && cachedOpp && cachedOpp.turrets !== undefined && cachedOpp.kp !== undefined) {
+        const playerMetrics = score.metrics as any;
+        // Check if Player Tankiness is "Healty" (New Formula > 5 usually. Old formula < 1)
+        const isPlayerHealthy = (playerMetrics?.tankiness || 0) > 2;
+
+        // Strict check: must have turrets, kp, and tankiness to be considered "fresh" AND player data must be healthy
+        if (isPlayerHealthy && score.opponentChampionName && cachedOpp && cachedOpp.turrets !== undefined && cachedOpp.kp !== undefined) {
             console.log(`[Cache] Hit for Match ${matchId}`);
             // Return cached format
             return this.formatMatchDetailResponse(score, score.opponentChampionName, cachedOpp, score.opponentChampionId || 0);
         }
 
         // 3. Cache Miss: Fetch from Riot
-        console.log(`[Cache] Miss for Match ${matchId}. Fetching from Riot...`);
+        console.log(`[Cache] Miss for Match ${matchId} (PlayerHealthy: ${isPlayerHealthy}). Fetching from Riot...`);
         try {
             const matchDto = await this.riotService!.getMatchDetails(matchId);
 
             // 4. Identify Participants
             const playerPart = matchDto.info.participants.find((p: any) => p.puuid === puuid);
             if (!playerPart) throw new Error('Player not found in match');
+
+            // --- FIX: Recalculate Player Tankiness if Stale ---
+            if (!isPlayerHealthy) {
+                const pDuration = matchDto.info.gameDuration;
+                const pTankiness = playerPart.totalDamageTaken / Math.max(1, pDuration - playerPart.totalTimeSpentDead);
+                playerMetrics.tankiness = pTankiness;
+                console.log(`[Cache] Patched Player Tankiness: ${pTankiness.toFixed(1)}`);
+            }
 
             // Logic reused from engine (simplified here or imported)
             const getOpponent = (p: any, all: any[]) => {
@@ -2037,12 +2124,9 @@ export class RankingService {
 
                 const oppKp = oppTeamKills > 0 ? (opponentPart.kills + opponentPart.assists) / oppTeamKills : 0;
 
-                // Helper: Tankiness (Engine Formula: TimeAlive / DamageTaken)
-                // Note: Engine uses (Duration - TimeSpentDead) / Max(1, DamageTaken)
-                // If damage taken is high, score is low? Engine logic seems to emphasize SURVIVAL per damage taken.
-                // We must mirror engine exactly.
+                // Helper: Tankiness (Engine Formula: DamageTaken / TimeAlive)
                 const duration = matchDto.info.gameDuration;
-                const oppTankiness = (duration - opponentPart.totalTimeSpentDead) / Math.max(1, opponentPart.totalDamageTaken);
+                const oppTankiness = opponentPart.totalDamageTaken / Math.max(1, duration - opponentPart.totalTimeSpentDead);
 
                 // Capture Objective Counts (using challenges if available for better accuracy)
                 oppMetrics = {
@@ -2076,10 +2160,11 @@ export class RankingService {
                     data: {
                         opponentChampionName: oppName,
                         opponentChampionId: oppId,
-                        opponentMetrics: oppMetrics
+                        opponentMetrics: oppMetrics,
+                        metrics: playerMetrics // <--- ALSO UPDATE PLAYER METRICS
                     }
                 });
-                console.log(`[Cache] Saved Opponent Info for ${matchId}`);
+                console.log(`[Cache] Saved Opponent Info & Patched Player Metrics for ${matchId}`);
             }
 
             return this.formatMatchDetailResponse(score, oppName, oppMetrics, oppId);

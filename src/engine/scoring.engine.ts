@@ -221,7 +221,7 @@ export const calculateMatchScore = (targetPuuid: string, match: MatchDTO): Match
         // Special: Tankiness (Tempo vivo / Dano Recebido) -> TimeAlive / DamageTaken
         // Avoiding div/0: if no damage taken, assume high efficiency? Or cap?
         // Let's use TimeAlive / Max(1, DamageTaken)
-        tankiness: (match.info.gameDuration - p.totalTimeSpentDead) / Math.max(1, p.totalDamageTaken),
+        tankiness: p.totalDamageTaken / Math.max(1, match.info.gameDuration - p.totalTimeSpentDead),
 
         // Objectives Counts
         turrets: (p.challenges?.turretTakedowns ?? p.turretKills ?? 0),
@@ -250,7 +250,7 @@ export const calculateMatchScore = (targetPuuid: string, match: MatchDTO): Match
         gpm: toPerMin(opp.goldEarned, match.info.gameDuration),
         vspm: toPerMin(opp.visionScore, match.info.gameDuration),
         kp: oppKp,
-        tankiness: (match.info.gameDuration - opp.totalTimeSpentDead) / Math.max(1, opp.totalDamageTaken),
+        tankiness: opp.totalDamageTaken / Math.max(1, match.info.gameDuration - opp.totalTimeSpentDead),
 
         turrets: (opp.challenges?.turretTakedowns ?? opp.turretKills ?? 0),
         dragons: (opp.challenges?.dragonTakedowns ?? opp.dragonKills ?? 0),

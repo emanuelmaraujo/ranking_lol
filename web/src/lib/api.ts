@@ -311,36 +311,46 @@ export interface InsightPlayer {
     tier?: string; // Added tier
 }
 
+export interface UniqueFeat extends InsightPlayer {
+    type: 'PENTA' | 'QUADRA' | 'PERFECT' | 'COMEBACK' | 'STOMP' | 'WIN_STREAK';
+    date: Date; // Keep as Date or string depending on backend usage, let's use Date string usually
+}
+
 export interface HallOfFameData {
-    pentaKing: InsightPlayer | null;
-    stomper: InsightPlayer | null;
-    farmMachine: InsightPlayer | null;
-    objectiveKing: InsightPlayer | null;
-    damageEfficient: InsightPlayer | null;
-    consistencyMachine: InsightPlayer | null;
+    pentakilleiro: InsightPlayer | null;
+    espanco: InsightPlayer | null;
+    ministroEconomia: InsightPlayer | null;
+    senhorDosDragoes: InsightPlayer | null;
+    sniper: InsightPlayer | null;
+    robo: InsightPlayer | null;
     // New
-    torreDemolidora: InsightPlayer | null;
-    soloClutch: InsightPlayer | null;
-    costasSeguras: InsightPlayer | null;
-    earlyTyrant: InsightPlayer | null;
-    lateDemon: InsightPlayer | null;
-    jungleGod: InsightPlayer | null;
-    macroPerfect: InsightPlayer | null;
+    demolidor: InsightPlayer | null;
+    x1Raiz: InsightPlayer | null;
+    anjoDaGuarda: InsightPlayer | null;
+    donodoEarly: InsightPlayer | null;
+    escalada: InsightPlayer | null;
+    reiDaSelva: InsightPlayer | null;
+    gigaChad: InsightPlayer | null;
+    // Unique
+    uniqueFeats: UniqueFeat[];
 }
 
 export interface HallOfShameData {
-    lowDmg: InsightPlayer | null;
+    topLoser: { gameName: string; profileIconId: number; pdlLoss: number } | null;
+    aCarroca: { championName: string; count: number; winrate: number } | null;
+    pacifista: InsightPlayer | null;
     alface: InsightPlayer | null;
-    farmLimbo: InsightPlayer | null; // Renamed from ghostFarmer
-    visionNegligente: InsightPlayer | null;
-    sumido: InsightPlayer | null;
+    agronomo: InsightPlayer | null;
+    cego: InsightPlayer | null;
+    ilusionista: InsightPlayer | null;
     // New
     sonecaBaron: InsightPlayer | null;
-    killCollector: InsightPlayer | null;
+    mataFofo: InsightPlayer | null;
     throwingStation: InsightPlayer | null;
-    soloDoador: InsightPlayer | null;
+    ifood: InsightPlayer | null;
     telaPreta: InsightPlayer | null;
     moedaBronze: InsightPlayer | null;
+    finado: InsightPlayer | null;
 }
 
 /**
@@ -418,8 +428,22 @@ export async function getGlobalHighlights(period: 'DAILY' | 'WEEKLY' | 'MONTHLY'
 /**
  * Community Feats & Duos
  */
-export async function getCommunityFeats(period: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'GENERAL', queue: 'SOLO' | 'FLEX') {
-    const res = await fetch(`${API_URL}/insights/feats?period=${period}&queue=${queue}`, { cache: 'no-store' });
+export async function getCommunityFeats(period: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'GENERAL', queue: 'SOLO' | 'FLEX'): Promise<HallOfFameData> {
+    let url = `${API_URL}/insights/fame?queue=${queue}`;
+
+    if (period !== 'GENERAL') {
+        const now = new Date();
+        const start = new Date();
+        start.setHours(0, 0, 0, 0); // Start of day logic usually better, but let's stick to simple
+
+        if (period === 'DAILY') start.setDate(now.getDate() - 1); // Last 24h or Today? Usually implies "This Day" or "Last 24h".
+        else if (period === 'WEEKLY') start.setDate(now.getDate() - 7);
+        else if (period === 'MONTHLY') start.setMonth(now.getMonth() - 1);
+
+        url += `&startDate=${start.toISOString()}&endDate=${now.toISOString()}`;
+    }
+
+    const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error('Failed to fetch feats');
     return res.json();
 }

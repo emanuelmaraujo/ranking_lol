@@ -8,9 +8,10 @@ import { CHAMPION_SPLASH_BASE } from '@/lib/constants';
 interface HeroSectionProps {
     player: RankingEntry | null;
     pdlDelta?: number | null;
+    period?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'GENERAL';
 }
 
-export function HeroSection({ player, pdlDelta }: HeroSectionProps) {
+export function HeroSection({ player, pdlDelta, period = 'GENERAL' }: HeroSectionProps) {
     const ref = useRef(null);
     const { scrollYProgress } = useScroll({
         target: ref,
@@ -27,8 +28,16 @@ export function HeroSection({ player, pdlDelta }: HeroSectionProps) {
     const normalizedName = normalizeChampionName(championName);
     const splashUrl = player.skin?.splashUrl || `${CHAMPION_SPLASH_BASE}/${normalizedName}_0.jpg`;
 
-    // Formatting
-    const skinName = player.skin?.name && player.skin.name !== 'default' ? player.skin.name : player.mainChampion?.name;
+    // Dynamic Title Logic
+    const getTitles = () => {
+        switch (period) {
+            case 'DAILY': return { badge: 'Destaque do Dia', title: 'Melhor do Dia' };
+            case 'WEEKLY': return { badge: 'Destaque da Semana', title: 'Melhor da Semana' };
+            case 'MONTHLY': return { badge: 'Destaque do Mês', title: 'Melhor do Mês' };
+            default: return { badge: 'Rei da Comunidade', title: 'O Dono do Server' };
+        }
+    };
+    const { badge, title } = getTitles();
 
     return (
         <section ref={ref} className="relative w-full max-w-[100%] md:max-w-[1400px] min-h-[400px] h-[75vh] lg:h-[800px] rounded-[1.5rem] md:rounded-[2.5rem] overflow-hidden mb-12 md:mb-16 group shadow-2xl shadow-emerald-900/10 mx-auto">
@@ -64,7 +73,7 @@ export function HeroSection({ player, pdlDelta }: HeroSectionProps) {
                 >
                     <div className="flex items-center gap-2 bg-yellow-500/20 backdrop-blur-xl border border-yellow-500/40 px-3 py-1.5 md:px-4 md:py-2 rounded-full shadow-[0_0_30px_rgba(234,179,8,0.2)]">
                         <Crown className="w-3 h-3 md:w-4 md:h-4 text-yellow-400 fill-yellow-400 animate-pulse" />
-                        <span className="text-yellow-100 font-bold uppercase tracking-widest text-[10px] md:text-xs">Rei da Comunidade</span>
+                        <span className="text-yellow-100 font-bold uppercase tracking-widest text-[10px] md:text-xs">{badge}</span>
                     </div>
                 </motion.div>
 
@@ -77,7 +86,7 @@ export function HeroSection({ player, pdlDelta }: HeroSectionProps) {
                     >
                         <h2 className="text-emerald-500 font-[family-name:var(--font-outfit)] font-bold text-sm md:text-xl md:text-2xl tracking-[0.2em] uppercase mb-2 flex items-center gap-3">
                             <span className='w-6 h-[2px] md:w-8 bg-emerald-500 inline-block shadow-[0_0_8px_rgba(16,185,129,0.8)]' />
-                            O DONO DO SERVER
+                            {title}
                         </h2>
                         {/* Dynamic Font Scaling for Nickname */}
                         <h1 className={`${player.gameName.length > 12 ? (player.gameName.length > 16 ? 'text-3xl md:text-5xl lg:text-6xl' : 'text-4xl md:text-6xl lg:text-7xl') : 'text-5xl md:text-7xl lg:text-8xl'} font-[family-name:var(--font-outfit)] font-black text-white tracking-tighter uppercase leading-[0.9] mb-4 md:mb-6 drop-shadow-xl mix-blend-lighten whitespace-nowrap`}>

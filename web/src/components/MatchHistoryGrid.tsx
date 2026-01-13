@@ -6,6 +6,7 @@ import { Swords, Shield, Crosshair, Zap, Trees, Grip, Clock, Skull, Trophy, Coin
 import { motion } from 'framer-motion';
 import { DDRAGON_VERSION } from '@/lib/constants';
 import { normalizeChampionName } from '@/lib/utils';
+import { getTimeAgoBr, formatMatchTime } from '@/lib/date-utils';
 
 interface Props {
     history: MatchHistoryEntry[];
@@ -63,14 +64,7 @@ function MatchRow({ match, theme, index, onClick }: { match: MatchHistoryEntry, 
         return num.toString();
     };
 
-    // Calculate time ago
-    const timeAgo = (date: string) => {
-        const diff = Date.now() - new Date(date).getTime();
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        if (days === 0) return 'Hoje';
-        if (days === 1) return 'Ontem';
-        return `${days}d`;
-    };
+
 
     return (
         <motion.div
@@ -154,7 +148,7 @@ function MatchRow({ match, theme, index, onClick }: { match: MatchHistoryEntry, 
                     {isWin ? 'Win' : 'Loss'}
                 </div>
                 <div className="text-[10px] font-[family-name:var(--font-outfit)] font-medium text-zinc-500 flex items-center justify-end gap-1">
-                    {timeAgo(match.date)} • {new Date(match.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    {getTimeAgoBr(match.date)} • {formatMatchTime(match.date)}
                 </div>
             </div>
         </motion.div>
