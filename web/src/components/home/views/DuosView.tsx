@@ -41,7 +41,7 @@ export function DuosView({ period, queue }: { period: any, queue: any }) {
     };
 
     return (
-        <div className="w-full max-w-[1400px] mx-auto p-4 pt-32 pb-12 grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="w-full max-w-[1400px] mx-auto p-4 pb-12 grid grid-cols-1 lg:grid-cols-2 gap-8">
 
             {/* 1. CASAL 20 (Best Duo) */}
             <motion.div

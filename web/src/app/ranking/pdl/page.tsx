@@ -13,7 +13,7 @@ import Link from "next/link";
 
 export default function PdlRankingPage() {
     const { queueType } = useQueue();
-    const [period, setPeriod] = useState<'SEASON' | 'MONTH' | 'WEEK'>('SEASON');
+    const [period, setPeriod] = useState<'SEASON' | 'MONTH' | 'WEEK' | 'DAY'>('SEASON');
 
     const [data, setData] = useState<PdlGainEntry[]>([]);
     const [loading, setLoading] = useState(true);
@@ -30,6 +30,8 @@ export default function PdlRankingPage() {
                     startDate = getDateRange('WEEKLY')?.start;
                 } else if (period === 'MONTH') {
                     startDate = getDateRange('MONTHLY')?.start;
+                } else if (period === 'DAY') {
+                    startDate = getDateRange('DAILY')?.start;
                 }
 
                 // For SEASON, we don't send startDate, API handles it (since beginning of time/season)
@@ -99,6 +101,19 @@ export default function PdlRankingPage() {
                         )}
                         <span className="relative z-10 flex items-center gap-2">
                             <Calendar size={12} /> Semana
+                        </span>
+                    </button>
+
+                    <button
+                        onClick={() => setPeriod('DAY')}
+                        className={`relative px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all overflow-hidden ${period === 'DAY' ? 'text-black' : 'text-gray-400 hover:text-white'
+                            }`}
+                    >
+                        {period === 'DAY' && (
+                            <motion.div layoutId="period-bg" className="absolute inset-0 bg-emerald-500" />
+                        )}
+                        <span className="relative z-10 flex items-center gap-2">
+                            Hoje
                         </span>
                     </button>
                 </div>
@@ -186,13 +201,13 @@ export default function PdlRankingPage() {
                             <Card className="hidden md:block overflow-hidden border border-white/5 bg-black/20 backdrop-blur-sm shadow-2xl">
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="border-b border-white/5 text-gray-500 text-[10px] font-bold uppercase tracking-widest bg-white/5">
-                                                <th className="p-4 w-16 text-center">#</th>
+                                        <thead className="sticky top-0 z-20">
+                                            <tr className="border-b border-white/5 text-gray-500 text-[10px] font-bold uppercase tracking-widest bg-black/60 backdrop-blur-xl">
+                                                <th className="p-4 w-16 text-center rounded-tl-xl">#</th>
                                                 <th className="p-4">Ativo (Jogador)</th>
                                                 <th className="p-4">Evolução</th>
                                                 <th className="p-4 text-right">Saldo (PDL)</th>
-                                                <th className="p-4 text-center">Tendência</th>
+                                                <th className="p-4 text-center rounded-tr-xl">Tendência</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-white/5">

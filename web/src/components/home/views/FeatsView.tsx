@@ -58,7 +58,7 @@ export function FeatsView({ period, queue }: { period: any, queue: any }) {
     });
 
     return (
-        <div className="w-full max-w-[1500px] mx-auto space-y-16 animate-in fade-in duration-700 py-12">
+        <div className="w-full max-w-[1500px] mx-auto space-y-16 animate-in fade-in duration-700 pb-12">
 
             {/* 1. HERO: FEITOS ÉPICOS (Unique) */}
             <div>
@@ -117,25 +117,25 @@ export function FeatsView({ period, queue }: { period: any, queue: any }) {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 relative z-10">
                     {/* Combat */}
-                    {data.pentakilleiro && <InsightCard title="Pentakilleiro" subtitle="Mãos de Tesoura" icon={Swords} player={data.pentakilleiro} twColor="red" value={data.pentakilleiro.value} unit="Pentas" delay={0.1} />}
-                    {data.espanco && <InsightCard title="Espanco" subtitle="KDA Player" icon={Skull} player={data.espanco} twColor="orange" value={data.espanco.value} delay={0.15} />}
-                    {data.x1Raiz && <InsightCard title="Rei do X1" subtitle="Duelista Nato" icon={Swords} player={data.x1Raiz} twColor="red" value={data.x1Raiz.value} unit="Solos" delay={0.2} />}
-                    {data.sniper && <InsightCard title="Sniper" subtitle="Eficiência de Dano" icon={Crosshair} player={data.sniper} twColor="amber" value={data.sniper.value} delay={0.25} />}
+                    {data.pentakilleiro && <InsightCard title="Pentakilleiro" badge="Mãos de Tesoura" icon={Swords} player={data.pentakilleiro} twColor="red" value={data.pentakilleiro.value} unit="Pentas" delay={0.1} />}
+                    {data.espanco && <InsightCard title="Espanco" badge="KDA Player" icon={Skull} player={data.espanco} twColor="orange" value={data.espanco.value} delay={0.15} />}
+                    {data.x1Raiz && <InsightCard title="Rei do X1" badge="Duelista Nato" icon={Swords} player={data.x1Raiz} twColor="red" value={data.x1Raiz.value} unit="Solos" delay={0.2} />}
+                    {data.sniper && <InsightCard title="Sniper" badge="Eficiência de Dano" icon={Crosshair} player={data.sniper} twColor="amber" value={data.sniper.value} delay={0.25} />}
 
                     {/* Objective & Macro */}
-                    {data.demolidor && <InsightCard title="O Demolidor" subtitle="Destruidor de Torres" icon={Crown} player={data.demolidor} twColor="amber" value={data.demolidor.value} delay={0.3} extraInfo={data.demolidor.detail} />}
-                    {data.senhorDosDragoes && <InsightCard title="Senhor dos Dragões" subtitle="Controle de Objetivos" icon={Target} player={data.senhorDosDragoes} twColor="indigo" value={data.senhorDosDragoes.value} delay={0.35} />}
-                    {data.ministroEconomia && <InsightCard title="Ministro da Economia" subtitle="Farm Machine" icon={TrendingUp} player={data.ministroEconomia} twColor="green" value={data.ministroEconomia.value} unit="CS/min" delay={0.4} />}
-                    {data.gigaChad && <InsightCard title="Giga Chad" subtitle="Macro Gaming" icon={Trophy} player={data.gigaChad} twColor="cyan" value={data.gigaChad.value} delay={0.45} extraInfo={data.gigaChad.detail} />}
+                    {data.demolidor && <InsightCard title="O Demolidor" badge="Destruidor de Torres" icon={Crown} player={data.demolidor} twColor="amber" value={data.demolidor.value} delay={0.3} subtext={data.demolidor.detail} />}
+                    {data.senhorDosDragoes && <InsightCard title="Senhor dos Dragões" badge="Controle de Objetivos" icon={Target} player={data.senhorDosDragoes} twColor="indigo" value={data.senhorDosDragoes.value} delay={0.35} />}
+                    {data.ministroEconomia && <InsightCard title="Ministro da Economia" badge="Farm Machine" icon={TrendingUp} player={data.ministroEconomia} twColor="green" value={data.ministroEconomia.value} unit="CS/min" delay={0.4} />}
+                    {data.gigaChad && <InsightCard title="Giga Chad" badge="Macro Gaming" icon={Trophy} player={data.gigaChad} twColor="cyan" value={data.gigaChad.value} delay={0.45} subtext={data.gigaChad.detail} />}
 
                     {/* Role Specific */}
-                    {data.reiDaSelva && <InsightCard title="Rei da Selva" subtitle="Dono do Mato" icon={Target} player={data.reiDaSelva} twColor="green" value={data.reiDaSelva.value} unit="Campos" delay={0.5} />}
-                    {data.anjoDaGuarda && <InsightCard title="Anjo da Guarda" subtitle="Suporte de Elite" icon={Shield} player={data.anjoDaGuarda} twColor="blue" value={data.anjoDaGuarda.value} unit="Saves" delay={0.55} extraInfo={data.anjoDaGuarda.detail} />}
+                    {data.reiDaSelva && <InsightCard title="Rei da Selva" badge="Dono do Mato" icon={Target} player={data.reiDaSelva} twColor="green" value={data.reiDaSelva.value} unit="Campos" delay={0.5} />}
+                    {data.anjoDaGuarda && <InsightCard title="Anjo da Guarda" badge="Suporte de Elite" icon={Shield} player={data.anjoDaGuarda} twColor="blue" value={data.anjoDaGuarda.value} unit="Saves" delay={0.55} subtext={data.anjoDaGuarda.detail} />}
 
                     {/* Game Flow */}
-                    {data.donodoEarly && <InsightCard title="Dono do Early" subtitle="Snowballer" icon={Timer} player={data.donodoEarly} twColor="amber" value={data.donodoEarly.value} unit="Ouro @15" delay={0.6} />}
-                    {data.escalada && <InsightCard title="A Escalada" subtitle="Late Game Demon" icon={TrendingUp} player={data.escalada} twColor="purple" value={data.escalada.value} delay={0.65} />}
-                    {data.robo && <InsightCard title="O Robô" subtitle="Consistência" icon={User} player={data.robo} twColor="zinc" value={data.robo.value} delay={0.7} />}
+                    {data.donodoEarly && <InsightCard title="Dono do Early" badge="Snowballer" icon={Timer} player={data.donodoEarly} twColor="amber" value={data.donodoEarly.value} unit="Ouro @15" delay={0.6} />}
+                    {data.escalada && <InsightCard title="A Escalada" badge="Late Game Demon" icon={TrendingUp} player={data.escalada} twColor="purple" value={data.escalada.value} delay={0.65} />}
+                    {data.robo && <InsightCard title="O Robô" badge="Consistência" icon={User} player={data.robo} twColor="zinc" value={data.robo.value} delay={0.7} />}
                 </div>
             </div>
         </div>
@@ -143,7 +143,7 @@ export function FeatsView({ period, queue }: { period: any, queue: any }) {
 }
 
 function UniqueFeatCard({ feat, index, isHighlight = false }: { feat: UniqueFeat, index: number, isHighlight?: boolean }) {
-    const splash = feat.championName ? `${CHAMPION_SPLASH_BASE}/${normalizeChampionName(feat.championName)}_0.jpg` : null;
+    const splash = feat.championName ? `${CHAMPION_SPLASH_BASE}/${normalizeChampionName(feat.championName)}_${feat.skinId || 0}.jpg` : null;
 
     const colors: any = {
         PENTA: 'from-amber-600 via-yellow-700 to-yellow-900 border-yellow-400 text-yellow-200',
@@ -170,8 +170,13 @@ function UniqueFeatCard({ feat, index, isHighlight = false }: { feat: UniqueFeat
                 <div className="absolute -inset-1 bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-700 pointer-events-none" />
             )}
 
-            {/* Background Image */}
-            <div className="absolute inset-0 bg-zinc-950" />
+            {/* Default Fallback Background (Abstract Pattern) */}
+            <div className="absolute inset-0 bg-zinc-900">
+                <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at center, #ffffff 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+                <div className="absolute inset-0 bg-gradient-to-br from-black/50 to-transparent" />
+            </div>
+
+            {/* Champion Splash */}
             {splash && (
                 <div
                     className="absolute inset-0 bg-cover bg-center transition-transform duration-[20s] ease-in-out group-hover:scale-110"

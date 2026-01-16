@@ -314,6 +314,7 @@ export interface InsightPlayer {
 export interface UniqueFeat extends InsightPlayer {
     type: 'PENTA' | 'QUADRA' | 'PERFECT' | 'COMEBACK' | 'STOMP' | 'WIN_STREAK';
     date: Date; // Keep as Date or string depending on backend usage, let's use Date string usually
+    skinId?: number;
 }
 
 export interface HallOfFameData {

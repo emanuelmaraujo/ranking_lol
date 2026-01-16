@@ -26,7 +26,7 @@ export function HallOfShameCarousel({ shameData, loading }: HallOfShameCarouselP
     if (wantedList.length === 0) return null;
 
     return (
-        <div className="w-full overflow-hidden py-10">
+        <div className="w-full overflow-hidden pt-24 pb-10">
             <div className="flex items-center gap-4 mb-6 px-4 max-w-[1400px] mx-auto">
                 <Gavel className="text-red-500 w-6 h-6" />
                 <h2 className="text-2xl font-bold text-white">Mural de PROCURADOS</h2>

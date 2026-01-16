@@ -3,20 +3,21 @@ import { LucideIcon } from 'lucide-react';
 
 interface InsightCardProps {
     title: string;
-    subtitle: string;
+    badge: string;
+    subtext?: string;
+    zoeira?: string;
     value: string | number;
     unit?: string;
     icon: LucideIcon;
-    player: {
+    player?: {
         gameName: string;
         profileIconId?: number | null;
     };
     twColor: 'amber' | 'blue' | 'green' | 'purple' | 'indigo' | 'orange' | 'red' | 'zinc' | 'cyan';
     delay?: number;
-    extraInfo?: string;
 }
 
-export function InsightCard({ title, subtitle, value, unit, icon: Icon, player, twColor, delay = 0, extraInfo }: InsightCardProps) {
+export function InsightCard({ title, badge, value, unit, icon: Icon, player, twColor, delay = 0, subtext, zoeira }: InsightCardProps) {
     const themeMap: any = {
         amber: { text: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/10', blur: 'bg-amber-500/5', hover: 'hover:border-amber-500/30', hoverBg: 'group-hover:bg-amber-500/10' },
         blue: { text: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/10', blur: 'bg-blue-500/5', hover: 'hover:border-blue-500/30', hoverBg: 'group-hover:bg-blue-500/10' },
@@ -36,7 +37,7 @@ export function InsightCard({ title, subtitle, value, unit, icon: Icon, player, 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay }}
-            className={`bg-[#09090b] rounded-[1.5rem] border border-white/5 p-5 relative overflow-hidden group ${theme.hover} transition-all duration-300 hover:shadow-xl hover:-translate-y-1 flex flex-col justify-between h-[200px]`}
+            className={`bg-[#09090b] rounded-[1.5rem] border border-white/5 p-5 relative overflow-hidden group ${theme.hover} transition-all duration-300 hover:shadow-xl hover:-translate-y-1 flex flex-col justify-between h-[240px]`}
         >
             <div className={`absolute top-0 right-0 w-32 h-32 ${theme.blur} blur-[40px] opacity-20 ${theme.hoverBg} transition-colors rounded-full -mr-10 -mt-10 pointer-events-none`} />
 
@@ -46,32 +47,50 @@ export function InsightCard({ title, subtitle, value, unit, icon: Icon, player, 
                     <Icon className={`w-5 h-5 ${theme.text}`} />
                 </div>
                 <div className="flex-1 min-w-0 pt-0.5">
-                    <p className={`${theme.text} text-[10px] font-bold uppercase tracking-widest leading-tight mb-0.5 opacity-80 truncate`}>{subtitle}</p>
-                    <h3 className="text-base font-black text-white uppercase italic tracking-tighter leading-[0.9] break-words hyphens-auto">{title}</h3>
+                    <p className={`${theme.text} text-[10px] font-bold uppercase tracking-widest leading-tight mb-0.5 opacity-80 truncate`}>{badge || '---'}</p>
+                    <h3 className="text-sm md:text-base font-black text-white uppercase italic tracking-tighter leading-[0.9] truncate" title={title}>{title}</h3>
                 </div>
             </div>
 
             {/* Value & Player */}
             <div className="relative z-10">
-                <div className="text-4xl font-black text-white mb-2 tracking-tighter leading-none flex items-baseline">
+                <div className="text-4xl font-black text-white mb-1 tracking-tighter leading-none flex items-baseline outline-text">
                     {value}
                     {unit && <span className={`text-xl ${theme.text} ml-1 font-bold opacity-80`}>{unit}</span>}
                 </div>
-                {extraInfo && (
-                    <div className={`text-[10px] font-bold uppercase tracking-wider ${theme.text} mb-2 opacity-80`}>
-                        {extraInfo}
+
+                {/* Subtext (Stat Explanation) */}
+                {subtext && (
+                    <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-3 truncate">
+                        {subtext}
                     </div>
                 )}
-                <div className="flex items-center gap-2">
-                    <div className="relative">
-                        <img
-                            src={`https://ddragon.leagueoflegends.com/cdn/16.1.1/img/profileicon/${player.profileIconId || 1}.png`}
-                            className="w-6 h-6 rounded-full border border-zinc-700 bg-zinc-800"
-                            alt={player.gameName}
-                        />
+
+                <div className="flex items-center justify-between mt-auto">
+                    <div className="flex items-center gap-2">
+                        {player ? (
+                            <>
+                                <div className="relative">
+                                    <img
+                                        src={`https://ddragon.leagueoflegends.com/cdn/16.1.1/img/profileicon/${player.profileIconId || 1}.png`}
+                                        className="w-6 h-6 rounded-full border border-zinc-700 bg-zinc-800"
+                                        alt={player.gameName}
+                                    />
+                                </div>
+                                <span className="text-xs text-zinc-400 font-bold group-hover:text-zinc-300 transition-colors">{player.gameName}</span>
+                            </>
+                        ) : (
+                            <span className="text-xs text-zinc-600 font-bold italic">Sem dados</span>
+                        )}
                     </div>
-                    <span className="text-xs text-zinc-400 font-bold truncate group-hover:text-zinc-300 transition-colors">{player.gameName}</span>
                 </div>
+
+                {/* Zoeira (Sempre visível ou on hover? User disse: camada social. Deixar visivel no bottom) */}
+                {zoeira && (
+                    <div className={`mt-3 pt-3 border-t border-white/5 ${theme.text} text-[10px] font-bold uppercase tracking-widest opacity-80 italic`}>
+                        "{zoeira}"
+                    </div>
+                )}
             </div>
         </motion.div>
     );

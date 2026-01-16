@@ -60,7 +60,7 @@ export default function InsightsPage() {
     return (
         <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700 pb-20">
             {/* Header & Toggle */}
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                 <div>
                     <h1 className="text-3xl font-[family-name:var(--font-outfit)] font-bold text-white flex items-center gap-2">
                         <Flame className="w-8 h-8 text-orange-500" />
@@ -72,13 +72,13 @@ export default function InsightsPage() {
                     </p>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-3">
-                    <div className="bg-black/40 p-1 rounded-lg flex items-center border border-white/5 h-fit">
+                <div className="w-full md:w-auto flex flex-col sm:flex-row gap-3">
+                    <div className="bg-black/40 p-1 rounded-lg flex flex-wrap items-center justify-center md:justify-start border border-white/5 w-full md:w-auto">
                         {(['GENERAL', 'MONTHLY', 'WEEKLY'] as const).map(p => (
                             <button
                                 key={p}
                                 onClick={() => setPeriod(p)}
-                                className={`px-4 py-1.5 rounded-md text-sm font-[family-name:var(--font-outfit)] font-medium transition-all ${period === p ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'text-gray-400 hover:text-white'}`}
+                                className={`px-4 py-1.5 rounded-md text-sm font-[family-name:var(--font-outfit)] font-medium transition-all whitespace-nowrap flex-1 md:flex-none ${period === p ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'text-gray-400 hover:text-white'}`}
                             >
                                 {p === 'GENERAL' ? 'Geral' : p === 'MONTHLY' ? 'Mensal' : 'Semanal'}
                             </button>
@@ -114,7 +114,7 @@ function TabSystem({ data, fame, shame }: { data: PeriodHighlights, fame: HallOf
 
     return (
         <div className="space-y-6">
-            <div className="flex gap-2">
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
                 <button
                     onClick={() => setActiveTab('highlights')}
                     className={`px-4 py-2 rounded-lg font-[family-name:var(--font-outfit)] font-medium transition-colors ${activeTab === 'highlights' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'}`}

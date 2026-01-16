@@ -62,14 +62,14 @@ export function HeroSection({ player, pdlDelta, period = 'GENERAL' }: HeroSectio
             </motion.div>
 
             {/* CONTENT LAYER */}
-            <div className="absolute inset-0 z-10 flex flex-col justify-end p-6 md:p-16 lg:p-24 pb-20 md:pb-24">
+            <div className="absolute inset-0 z-10 flex flex-col justify-between p-6 md:p-12 lg:p-16">
 
                 {/* Top Badge */}
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5, duration: 0.8 }}
-                    className="absolute top-6 left-6 md:top-12 md:left-12 flex items-center gap-3"
+                    className="self-start flex items-center gap-3 pt-0" /* Clean start */
                 >
                     <div className="flex items-center gap-2 bg-yellow-500/20 backdrop-blur-xl border border-yellow-500/40 px-3 py-1.5 md:px-4 md:py-2 rounded-full shadow-[0_0_30px_rgba(234,179,8,0.2)]">
                         <Crown className="w-3 h-3 md:w-4 md:h-4 text-yellow-400 fill-yellow-400 animate-pulse" />
@@ -78,7 +78,7 @@ export function HeroSection({ player, pdlDelta, period = 'GENERAL' }: HeroSectio
                 </motion.div>
 
                 {/* Main Player Info */}
-                <div className="max-w-4xl">
+                <div className="max-w-4xl pb-12 md:pb-8">
                     <motion.div
                         initial={{ opacity: 0, x: -50 }}
                         animate={{ opacity: 1, x: 0 }}

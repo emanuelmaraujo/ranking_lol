@@ -974,7 +974,7 @@ export class RankingService {
         });
 
         // Track Win Streaks
-        const currentStreaks: Record<string, { count: number, start: Date, matchId: string, champion: string }> = {};
+
 
         // 1. Aggregations (Pentas, Consistency)
         const playerStats: Record<string, {
@@ -1024,6 +1024,9 @@ export class RankingService {
         // Unique Feats list
         const uniqueFeats: any[] = [];
 
+        // Track Win Streaks
+        const currentStreaks: Record<string, { count: number, start: Date, matchId: string, champion: string, skinId: number }> = {};
+
         // Populate Aggregations & Single Game Checks
         for (const s of scores) {
             const metrics = s.metrics as any;
@@ -1033,14 +1036,15 @@ export class RankingService {
             // --- Win Streak Logic ---
             if (s.isVictory) {
                 if (!currentStreaks[pid]) {
-                    currentStreaks[pid] = { count: 0, start: s.match.gameCreation, matchId: s.matchId, champion: s.championName };
+                    currentStreaks[pid] = { count: 0, start: s.match.gameCreation, matchId: s.matchId, champion: s.championName, skinId: metrics?.skinId || 0 };
                 }
                 currentStreaks[pid].count++;
                 currentStreaks[pid].matchId = s.matchId; // Update to latest match in streak
                 currentStreaks[pid].champion = s.championName;
+                currentStreaks[pid].skinId = metrics?.skinId || 0;
             } else {
                 // Check if broken streak was epic
-                if (currentStreaks[pid] && currentStreaks[pid].count >= 3) {
+                if (currentStreaks[pid] && currentStreaks[pid].count >= 4) {
                     uniqueFeats.push({
                         ...s.player,
                         value: currentStreaks[pid].count,
@@ -1048,12 +1052,13 @@ export class RankingService {
                         type: 'WIN_STREAK',
                         matchId: currentStreaks[pid].matchId,
                         championName: currentStreaks[pid].champion,
+                        skinId: currentStreaks[pid].skinId,
                         date: currentStreaks[pid].start,
                         detail: 'Sequência de Vitórias'
                     });
                 }
                 // Reset
-                currentStreaks[pid] = { count: 0, start: new Date(), matchId: '', champion: '' };
+                currentStreaks[pid] = { count: 0, start: new Date(), matchId: '', champion: '', skinId: 0 };
             }
 
             if (!playerStats[s.playerId]) {
@@ -1069,7 +1074,7 @@ export class RankingService {
             if (pentas > 0) {
                 // Push one per penta occurrence
                 for (let i = 0; i < pentas; i++) {
-                    uniqueFeats.push({ ...s.player, type: 'PENTA', label: 'A Lenda Viva', matchId: s.matchId, champion: s.championName, value: 5, date: s.match.gameCreation });
+                    uniqueFeats.push({ ...s.player, type: 'PENTA', label: 'A Lenda Viva', matchId: s.matchId, champion: s.championName, skinId: metrics?.skinId || 0, value: 5, date: s.match.gameCreation });
                 }
             }
 
@@ -1077,21 +1082,23 @@ export class RankingService {
             const quadras = Number(metrics?.quadraKills || 0);
             if (quadras > 0 && pentas === 0) {
                 for (let i = 0; i < quadras; i++) {
-                    uniqueFeats.push({ ...s.player, type: 'QUADRA', label: 'Quase Lenda', matchId: s.matchId, champion: s.championName, value: 4, date: s.match.gameCreation });
+                    uniqueFeats.push({ ...s.player, type: 'QUADRA', label: 'Quase Lenda', matchId: s.matchId, champion: s.championName, skinId: metrics?.skinId || 0, value: 4, date: s.match.gameCreation });
                 }
             }
 
-            if (s.isVictory && s.deaths === 0 && s.kills >= 5) {
-                uniqueFeats.push({ ...s.player, type: 'PERFECT', label: 'Intocável', matchId: s.matchId, champion: s.championName, value: `${s.kills}/${s.deaths}/${s.assists}`, date: s.match.gameCreation });
+            if (s.isVictory && s.deaths === 0 && s.kills >= 7) {
+                uniqueFeats.push({ ...s.player, type: 'PERFECT', label: 'Intocável', matchId: s.matchId, champion: s.championName, skinId: metrics?.skinId || 0, value: `${s.kills}/${s.deaths}/${s.assists}`, date: s.match.gameCreation });
             }
 
             const gd15 = Number(challenges.goldDiffAt15 || 0);
-            if (s.isVictory && gd15 < -2000) {
-                uniqueFeats.push({ ...s.player, type: 'COMEBACK', label: 'O Milagre', matchId: s.matchId, champion: s.championName, value: Math.abs(gd15).toFixed(0), detail: 'Ouro -2k @15', date: s.match.gameCreation });
+            if (s.isVictory && gd15 < -5000) {
+                uniqueFeats.push({ ...s.player, type: 'COMEBACK', label: 'O Milagre', matchId: s.matchId, champion: s.championName, skinId: metrics?.skinId || 0, value: Math.abs(gd15).toFixed(0), detail: 'Ouro -5k @15', date: s.match.gameCreation });
             }
 
-            if (s.isVictory && s.match.gameDuration < 1200) {
-                uniqueFeats.push({ ...s.player, type: 'STOMP', label: 'Speedrun', matchId: s.matchId, champion: s.championName, value: `${(s.match.gameDuration / 60).toFixed(0)} min`, date: s.match.gameCreation });
+            // Stomp (Speedrun) - Stricter: 15m (900s) <= Duration < 18min (1080s) AND Gold Lead > 6k
+            // Minimum 15m ensures we filter out Remakes and Early Surrenders (AFK)
+            if (s.isVictory && s.match.gameDuration >= 900 && s.match.gameDuration < 1080 && gd15 > 6000) {
+                uniqueFeats.push({ ...s.player, type: 'STOMP', label: 'Speedrun', matchId: s.matchId, champion: s.championName, skinId: metrics?.skinId || 0, value: `${(s.match.gameDuration / 60).toFixed(0)} min`, date: s.match.gameCreation });
             }
 
 
@@ -1608,14 +1615,16 @@ export class RankingService {
         });
 
         // 3. Init Stats
+        // 3. Init Stats
         let mostGames = { value: 0, player: null as any };
-        let bestWr = { value: 0, games: 0, player: null as any };
-        let worstWr = { value: 100, games: 0, player: null as any };
+        let bestWr = { value: 0, games: 0, player: null as any }; // Mestre (min 2 games)
+        let worstWr = { value: 100, games: 0, player: null as any }; // Tiltado (min 2 games, < 50%)
         let highestDmg = { value: 0, champion: '', player: null as any, matchId: '' };
         let highestVision = { value: 0, champion: '', player: null as any };
         let highestCS = { value: 0, champion: '', player: null as any };
         let highestAssists = { value: 0, champion: '', player: null as any };
-        let longestStreak = { value: 0, player: null as any, type: 'WIN' }; // or LOSS
+        let longestStreak = { value: 0, player: null as any, type: 'WIN' };
+        let longestGame = { value: 0, champion: '', player: null as any, matchId: '' }; // Maratona
         let shortestGame = { value: 999999, champion: '', player: null as any, matchId: '' };
         let mvp = { value: 0, games: 0, player: null as any };
 
@@ -1657,9 +1666,12 @@ export class RankingService {
                 highestAssists = { value: assists, champion: s.championName, player: s.player };
             }
 
-            // Shortest Game (Only Wins count for "Speedrun" typically, but let's check victory)
-            // Actually, shortest game is usually interesting if it is a win. 
-            // Let's filter for wins only for "Speedrun" to avoid surrender losses being highlighted.
+            // Longest Game (Maratona)
+            if (s.match.gameDuration > longestGame.value) {
+                longestGame = { value: s.match.gameDuration, champion: s.championName, player: s.player, matchId: s.matchId };
+            }
+
+            // Shortest Game
             if (s.isVictory && s.match.gameDuration < shortestGame.value && s.match.gameDuration > 300) { // Min 5 mins
                 shortestGame = { value: s.match.gameDuration, champion: s.championName, player: s.player, matchId: s.matchId };
             }
@@ -1673,45 +1685,54 @@ export class RankingService {
         });
 
         // 5. Calculate Final Stats (WR, MVP)
-        const minGames = (period === 'DAILY' || period === 'WEEKLY') ? 1 : 2;
+        // MESTRE: Min 2 games (if period allows, else 1) - Let's force 2 for Mestre quality
+        const minGamesMestre = 2; // Fixed requirement per user request "mestre tenha mais de uma partida"
+        // TILTADO: Min 2 games AND < 50%
+        const minGamesTiltado = 2;
 
         Object.values(playerStats).forEach(stat => {
             if (stat.games > mostGames.value) {
                 mostGames = { value: stat.games, player: stat.player };
             }
 
-            if (stat.games >= minGames) {
-                const wr = (stat.wins / stat.games) * 100;
-                const avgScore = stat.totalScore / stat.games;
+            const wr = (stat.wins / stat.games) * 100;
+            const avgScore = stat.totalScore / stat.games;
 
-                // WR
+            // Mestre Logic
+            if (stat.games >= minGamesMestre) {
                 if (wr > bestWr.value || (wr === bestWr.value && stat.games > bestWr.games)) {
                     bestWr = { value: wr, games: stat.games, player: stat.player };
                 }
+            }
+
+            // Tiltado Logic
+            if (stat.games >= minGamesTiltado && wr < 50) {
+                // Format: Lowest WR is "Best" for this category.
+                // If we have a current worst (e.g. 40%) and new is 30%, new wins.
+                // Init value is 100%.
                 if (wr < worstWr.value || (wr === worstWr.value && stat.games > worstWr.games)) {
                     worstWr = { value: wr, games: stat.games, player: stat.player };
                 }
+            }
 
-                // MVP (Avg Score)
+            // MVP (Avg Score) - Keep simple min limit
+            if (stat.games >= 1) {
                 if (avgScore > mvp.value) {
                     mvp = { value: avgScore, games: stat.games, player: stat.player };
                 }
             }
         });
 
-        // 5. Calculate Player Stats (WR, Streaks)
-        const minGamesForWr = (period === 'DAILY' || period === 'WEEKLY') ? 1 : 2;
+        // 5. Calculate Player Stats (Streaks)
+        // ... (Keep existing streak logic loop)
 
         Object.keys(playerMatches).forEach(pid => {
             const matches = playerMatches[pid];
             const player = matches[0].player; // info
-            const games = matches.length;
-            const wins = matches.filter(m => m.isVictory).length;
-            const wr = (wins / games) * 100;
+            const isWinStr = matches[0].isVictory;
 
-            // Check Streak (matches are desc)
+            // Re-calculate streak manually
             let currentStr = 0;
-            let isWinStr = matches[0].isVictory;
             for (const m of matches) {
                 if (m.isVictory === isWinStr) {
                     currentStr++;
@@ -1723,24 +1744,10 @@ export class RankingService {
             if (isWinStr && currentStr > longestStreak.value) {
                 longestStreak = { value: currentStr, player, type: 'WIN' };
             }
-
-            // Stats
-            if (games > mostGames.value) mostGames = { value: games, player };
-
-            if (games >= minGamesForWr) {
-                if (wr > bestWr.value || (wr === bestWr.value && games > bestWr.games)) {
-                    bestWr = { value: wr, games, player };
-                }
-                if (wr < worstWr.value || (wr === worstWr.value && games > worstWr.games)) {
-                    worstWr = { value: wr, games, player };
-                }
-            }
         });
 
-        // Most Played Champion (Filter: Must have >= 50% WR if possible)
+        // Most Played Champion
         let popularChamp = { name: '', count: 0, winrate: 0 };
-
-        // Convert to array and sort by count desc
         const sortedChamps = Object.entries(champStats)
             .map(([name, stat]) => ({
                 name,
@@ -1749,14 +1756,10 @@ export class RankingService {
             }))
             .sort((a, b) => b.count - a.count);
 
-        // Find first with WR >= 50%
         const positiveChamp = sortedChamps.find(c => c.winrate >= 50);
-
         if (positiveChamp) {
             popularChamp = positiveChamp;
         } else if (sortedChamps.length > 0) {
-            // Fallback: If nobody has positive WR, take the most played anyway (or user preference: hide it? "winrate negativo não deve aparecer")
-            // User said: "winrate negativo não deve aparecer". So if no positive champ, return null.
             popularChamp = { name: '', count: 0, winrate: 0 };
         }
 
@@ -1765,15 +1768,16 @@ export class RankingService {
             queue,
             mostGames: mostGames.value > 0 ? mostGames : null,
             bestWr: bestWr.games > 0 ? bestWr : null,
-            worstWr: worstWr.games > 0 ? worstWr : null,
+            worstWr: worstWr.games > 0 && worstWr.value < 50 ? worstWr : null, // Double check
             highestDmg: highestDmg.value > 0 ? highestDmg : null,
             highestVision: highestVision.value > 0 ? highestVision : null,
             highestCS: highestCS.value > 0 ? highestCS : null,
             highestAssists: highestAssists.value > 0 ? highestAssists : null,
-            longestStreak: longestStreak.value > 1 ? longestStreak : null, // Only streak > 1 matters
-            popularChamp: popularChamp.count > 0 ? popularChamp : null, // Will be null if no positive champ
+            longestStreak: longestStreak.value > 1 ? longestStreak : null,
+            popularChamp: popularChamp.count > 0 ? popularChamp : null,
             mvp: mvp.value > 0 ? mvp : null,
-            shortestGame: shortestGame.value < 999999 ? shortestGame : null
+            shortestGame: shortestGame.value < 999999 ? shortestGame : null,
+            longestGame: longestGame.value > 0 ? longestGame : null // Added
         };
     }
 

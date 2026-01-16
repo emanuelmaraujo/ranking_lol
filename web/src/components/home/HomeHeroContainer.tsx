@@ -63,7 +63,8 @@ export function HomeHeroContainer() {
         <section className="relative w-full min-h-[85vh] flex flex-col items-center">
 
             {/* Top Navigation Bar - Floating & Glass */}
-            <nav className="fixed top-24 z-50 flex items-center justify-center p-2 rounded-full bg-black/40 backdrop-blur-xl border border-white/10 shadow-2xl animate-in fade-in slide-in-from-top-4 duration-1000">
+            {/* Top Navigation Bar - Floating & Glass */}
+            <nav className="sticky top-24 md:top-32 z-[100] flex flex-col md:flex-row items-center justify-center p-2 rounded-3xl md:rounded-full bg-black/40 backdrop-blur-xl border border-white/10 shadow-2xl animate-in fade-in slide-in-from-top-4 duration-1000 gap-3 md:gap-0 my-4">
                 <div className="flex items-center gap-1 md:gap-2">
                     {navItems.map((item) => (
                         <button
@@ -75,7 +76,7 @@ export function HomeHeroContainer() {
                             {activeView === item.id && (
                                 <motion.div
                                     layoutId="bubble"
-                                    className="absolute inset-0 bg-white/10 border border-white/20 rounded-full shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                                    className="absolute inset-0 bg-white/10 border border-white/20 rounded-full shadow-[0_0_20px_rgba(250,204,21,0.1)]"
                                     transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                                 />
                             )}
@@ -89,7 +90,7 @@ export function HomeHeroContainer() {
                 <div className="w-px h-6 bg-white/10 mx-4 hidden md:block" />
 
                 {/* Period Selector (Mini) */}
-                <div className="hidden md:flex items-center bg-black/50 rounded-full p-1 border border-white/5">
+                <div className="flex items-center bg-black/50 rounded-full p-1 border border-white/5">
                     {(['DAILY', 'WEEKLY', 'MONTHLY', 'GENERAL'] as const).map((p) => (
                         <button
                             key={p}
