@@ -25,8 +25,8 @@ const TIERS = [
     { id: "PLATINUM", label: "Platinum" },
     { id: "GOLD", label: "Gold" },
     { id: "SILVER", label: "Silver" },
-    //    { id: "BRONZE", label: "Bronze" },
-    //    { id: "IRON", label: "Iron" },
+    { id: "BRONZE", label: "Bronze" },
+    { id: "IRON", label: "Iron" },
 ];
 
 const LANES = [
@@ -44,9 +44,10 @@ const MODES = [
 ];
 
 const PERIODS = [
-    { id: "GENERAL", label: "Geral" },
-    { id: "MONTHLY", label: "Mensal" },
+    { id: "DAILY", label: "Dia" },
     { id: "WEEKLY", label: "Semanal" },
+    { id: "MONTHLY", label: "Mensal" },
+    { id: "GENERAL", label: "Geral" },
 ];
 
 // Helper to calculate raw Elo value for sorting
@@ -71,7 +72,7 @@ export default function RankingPage() {
 
     // View Config
     const [viewMode, setViewMode] = useState<"TIER" | "GLOBAL" | "LANE">("GLOBAL");
-    const [period, setPeriod] = useState<"GENERAL" | "MONTHLY" | "WEEKLY">("GENERAL");
+    const [period, setPeriod] = useState<"GENERAL" | "MONTHLY" | "WEEKLY" | "DAILY">("WEEKLY");
 
     // Filters
     const [activeTier, setActiveTier] = useState("ALL");
@@ -164,48 +165,50 @@ export default function RankingPage() {
                         {viewMode === "LANE" && `Os reis da rota ${LANES.find(l => l.id === activeLane)?.label}.`}
                     </p>
 
-                    {/* Date Filters */}
-                    <div className="flex items-center gap-2 mt-4">
-                        <Calendar className="w-4 h-4 text-zinc-500" />
-                        <div className="flex gap-1 bg-white/5 p-1 rounded-lg">
-                            {PERIODS.map((p) => (
-                                <button
-                                    key={p.id}
-                                    onClick={() => setPeriod(p.id as any)}
-                                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${period === p.id
-                                        ? "bg-emerald-600 text-white shadow-lg"
-                                        : "text-zinc-500 hover:text-white hover:bg-white/5"
-                                        }`}
-                                >
-                                    {p.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
                 </div>
 
-                {/* Mode Tabs (Premium Look) */}
-                <div className="flex flex-col sm:flex-row gap-4 bg-black/40 p-1.5 rounded-2xl border border-white/10 backdrop-blur-xl">
-                    {MODES.map((mode) => (
-                        <button
-                            key={mode.id}
-                            onClick={() => setViewMode(mode.id as any)}
-                            className={`relative px-6 py-3 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2 ${viewMode === mode.id ? "text-white shadow-lg shadow-emerald-900/20" : "text-gray-400 hover:text-white"
-                                }`}
-                        >
-                            {viewMode === mode.id && (
-                                <motion.div
-                                    layoutId="activeModeTab"
-                                    className="absolute inset-0 bg-emerald-600 rounded-xl"
-                                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                                />
-                            )}
-                            <span className="relative z-10 flex items-center gap-2">
-                                <mode.icon className="w-4 h-4" />
-                                {mode.label}
-                            </span>
-                        </button>
-                    ))}
+                {/* Controls Area (Combined Mode & Period) */}
+                <div className="flex flex-col sm:flex-row gap-4 items-center mt-4 xl:mt-0">
+
+                    {/* Period Selector (Pill Style - HomeHero Inspired) */}
+                    <div className="flex items-center bg-black/50 rounded-full p-1 border border-white/5 order-2 sm:order-1">
+                        {PERIODS.map((p) => (
+                            <button
+                                key={p.id}
+                                onClick={() => setPeriod(p.id as any)}
+                                className={`px-4 py-1.5 rounded-full text-[11px] font-bold uppercase transition-all duration-300 ${period === p.id
+                                    ? 'bg-white/20 text-white shadow-[0_0_10px_rgba(255,255,255,0.1)]'
+                                    : 'text-zinc-600 hover:text-zinc-400'
+                                    }`}
+                            >
+                                {p.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Mode Tabs (Premium Look) */}
+                    <div className="flex flex-col sm:flex-row gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/10 backdrop-blur-xl order-1 sm:order-2">
+                        {MODES.map((mode) => (
+                            <button
+                                key={mode.id}
+                                onClick={() => setViewMode(mode.id as any)}
+                                className={`relative px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2 ${viewMode === mode.id ? "text-white shadow-lg shadow-emerald-900/20" : "text-gray-400 hover:text-white"
+                                    }`}
+                            >
+                                {viewMode === mode.id && (
+                                    <motion.div
+                                        layoutId="activeModeTab"
+                                        className="absolute inset-0 bg-emerald-600 rounded-xl"
+                                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                    />
+                                )}
+                                <span className="relative z-10 flex items-center gap-2">
+                                    <mode.icon className="w-4 h-4" />
+                                    {mode.label}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 
@@ -271,10 +274,22 @@ export default function RankingPage() {
             </div>
 
             {loading ? (
-                <div className="space-y-6">
-                    <div className="h-64 w-full bg-white/5 rounded-3xl animate-pulse" />
-                    <div className="space-y-3">
-                        {[1, 2, 3].map(i => <div key={i} className="h-20 w-full bg-white/5 rounded-xl animate-pulse" />)}
+                <div className="space-y-8">
+                    {/* Premium Skeleton - Hero */}
+                    <div className="w-full h-80 bg-white/5 rounded-3xl animate-pulse relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent skew-x-12 animate-shimmer" />
+                    </div>
+                    {/* Premium Skeleton - List */}
+                    <div className="space-y-2">
+                        {[1, 2, 3, 4, 5].map(i => (
+                            <div key={i} className="h-20 w-full bg-white/5 rounded-xl animate-pulse flex items-center px-6 gap-4 border border-white/5">
+                                <div className="w-8 h-8 rounded-lg bg-white/10" />
+                                <div className="w-10 h-10 rounded-full bg-white/10" />
+                                <div className="h-4 w-32 bg-white/10 rounded" />
+                                <div className="flex-1" />
+                                <div className="h-6 w-16 bg-white/10 rounded" />
+                            </div>
+                        ))}
                     </div>
                 </div>
             ) : (
@@ -292,9 +307,9 @@ export default function RankingPage() {
                             >
                                 <Card variant="glass" className="relative overflow-hidden group border-yellow-500/30">
                                     {/* Dynamic Background Gradient */}
-                                    <div className={`absolute inset-0 bg-gradient-to-r opacity-20 transition-colors duration-500 ${viewMode === "LANE"
+                                    <div className={`absolute inset-0 bg-gradient-to-r opacity-30 transition-colors duration-500 animate-pulse ${viewMode === "LANE"
                                         ? (LANES.find(l => l.id === activeLane)?.bg?.replace('/10', '/30') || "from-yellow-600/20")
-                                        : "from-yellow-600/20 via-orange-500/10 to-transparent"
+                                        : "from-yellow-600/30 via-orange-500/20 to-transparent"
                                         }`} />
 
                                     <div className="absolute top-0 right-0 w-96 h-96 bg-yellow-500/10 blur-[100px] rounded-full translate-x-1/3 -translate-y-1/3" />
@@ -445,7 +460,7 @@ export default function RankingPage() {
                     <div className="hidden md:block bg-black/20 rounded-3xl border border-white/5 overflow-hidden backdrop-blur-sm">
 
                         {/* Custom Table Header */}
-                        <div className="grid grid-cols-12 gap-4 p-4 border-b border-white/10 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                        <div className="sticky top-0 z-20 grid grid-cols-12 gap-4 p-4 border-b border-white/10 text-xs font-bold text-gray-400 uppercase tracking-wider bg-black/60 backdrop-blur-xl">
                             <div className="col-span-1 text-center">#</div>
                             <div className="col-span-4 md:col-span-3 lg:col-span-3">Jogador</div>
                             <div className="col-span-3 md:col-span-2 lg:col-span-2">Elo</div>
@@ -469,12 +484,15 @@ export default function RankingPage() {
                                 >
                                     {/* Rank */}
                                     <div className="col-span-1 flex justify-center">
-                                        <div className={`w-8 h-8 flex items-center justify-center rounded-lg font-bold ${index === 0 ? "bg-yellow-500 text-black shadow-lg shadow-yellow-500/20" :
-                                            index === 1 ? "bg-gray-300 text-black" :
-                                                index === 2 ? "bg-orange-700 text-white" :
-                                                    "text-gray-500 bg-white/5"
+                                        <div className={`w-8 h-8 flex items-center justify-center rounded-lg font-bold shadow-lg ${index === 0 ? "bg-yellow-500/20 text-yellow-500 border border-yellow-500/30" :
+                                            index === 1 ? "bg-slate-400/20 text-slate-300 border border-slate-400/30" :
+                                                index === 2 ? "bg-orange-700/20 text-orange-400 border border-orange-700/30" :
+                                                    "text-zinc-500 bg-white/5"
                                             }`}>
-                                            {index + 1}
+                                            {index === 0 ? <Trophy size={14} /> :
+                                                index === 1 ? <Medal size={14} /> :
+                                                    index === 2 ? <Medal size={14} /> :
+                                                        index + 1}
                                         </div>
                                     </div>
 
@@ -497,9 +515,9 @@ export default function RankingPage() {
                                     {/* Tier Info */}
                                     <div className="col-span-3 md:col-span-2 lg:col-span-2">
                                         <div className="flex flex-col">
-                                            <span className={`text-xs font-bold ${player.tier === "CHALLENGER" ? "text-yellow-400" :
-                                                player.tier === "GRANDMASTER" ? "text-red-400" :
-                                                    player.tier === "MASTER" ? "text-purple-400" :
+                                            <span className={`text-xs font-bold transition-all duration-300 ${player.tier === "CHALLENGER" ? "text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]" :
+                                                player.tier === "GRANDMASTER" ? "text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]" :
+                                                    player.tier === "MASTER" ? "text-purple-400 drop-shadow-[0_0_6px_rgba(192,132,252,0.4)]" :
                                                         "text-gray-300"
                                                 }`}>
                                                 {player.tier} {player.rankDivision}

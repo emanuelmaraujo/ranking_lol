@@ -14,6 +14,21 @@ interface MatchDetailsModalProps {
     onClose: () => void;
 }
 
+interface Participant {
+    puuid: string;
+    riotIdGameName: string;
+    riotIdTagline: string;
+    championId: number;
+    championName: string;
+    teamId: number;
+    role: string;
+    kills: number;
+    deaths: number;
+    assists: number;
+    kda: string;
+    win: boolean;
+}
+
 interface EnrichedDetails {
     matchId: string;
     outcome: string;
@@ -45,6 +60,7 @@ interface EnrichedDetails {
         discipline: any[];
         lane: string;
     };
+    participants: Participant[];
     insight: string;
 }
 
@@ -162,7 +178,8 @@ export function MatchDetailsModal({ match, puuid, onClose }: MatchDetailsModalPr
                                                         className={`relative w-24 h-24 md:w-28 md:h-28 rounded-full border-4 shadow-2xl ${theme.heroBorder}`}
                                                     />
                                                     <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#18181b] px-3 py-1 rounded-full border border-white/10 text-[10px] font-bold text-white whitespace-nowrap shadow-lg">
-                                                        VOCÊ
+                                                        { /* Dynamic Name if available in participants, else VOCÊ */}
+                                                        {details.participants?.find(p => p.puuid === puuid)?.riotIdGameName || "VOCÊ"}
                                                     </div>
                                                 </div>
                                                 <div className="text-center">
@@ -242,7 +259,66 @@ export function MatchDetailsModal({ match, puuid, onClose }: MatchDetailsModalPr
                                             />
                                         </div>
 
-                                        {/* 4. AI Insight */}
+                                        {/* 4. Match Participants (5v5 Grid) */}
+                                        {details.participants && details.participants.length > 0 && (
+                                            <div className="space-y-4">
+                                                <div className="flex items-center gap-2 text-xs font-bold text-zinc-500 uppercase tracking-wider mb-4 px-1">
+                                                    <Info size={14} />
+                                                    Participantes
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    {/* Split by Teams */}
+                                                    {[100, 200].map(teamId => {
+                                                        const teamStart = details.participants.filter(p => p.teamId === teamId);
+                                                        const isVictoryTeam = teamStart[0]?.win;
+
+                                                        return (
+                                                            <div key={teamId} className={`rounded-xl border ${isVictoryTeam ? 'border-amber-500/10 bg-amber-500/5' : 'border-red-500/10 bg-red-500/5'} p-4`}>
+                                                                <div className={`text-xs font-bold uppercase tracking-wider mb-3 ${isVictoryTeam ? 'text-amber-400' : 'text-red-400'}`}>
+                                                                    {isVictoryTeam ? 'Vitória' : 'Derrota'}
+                                                                </div>
+                                                                <div className="space-y-2">
+                                                                    {teamStart.map(p => {
+                                                                        const isMe = p.puuid === puuid;
+                                                                        return (
+                                                                            <div key={p.puuid} className={`flex items-center gap-3 p-2 rounded-lg border ${isMe ? 'border-white/20 bg-white/5 ring-1 ring-white/10' : 'border-transparent hover:bg-white/5'} transition-all`}>
+                                                                                {/* Champion Icon */}
+                                                                                <img
+                                                                                    src={`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${normalizeChampionName(p.championName)}.png`}
+                                                                                    alt={p.championName}
+                                                                                    className="w-8 h-8 rounded-full border border-white/10"
+                                                                                />
+
+                                                                                {/* Info */}
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <div className={`text-xs font-bold truncate ${isMe ? 'text-white' : 'text-zinc-400'}`}>
+                                                                                        {p.riotIdGameName}
+                                                                                    </div>
+                                                                                    <div className="text-[10px] text-zinc-600 truncate flex items-center gap-1">
+                                                                                        <span>{p.championName}</span>
+                                                                                        <span className="w-1 h-1 rounded-full bg-zinc-700" />
+                                                                                        <span>{p.role === 'UTILITY' ? 'SUPORTE' : p.role}</span>
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                {/* KDA */}
+                                                                                <div className="text-right">
+                                                                                    <div className="text-xs font-mono font-bold text-zinc-300">{p.kda}</div>
+                                                                                    <div className="text-[9px] text-zinc-600">KDA</div>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* 5. AI Insight */}
                                         <div className={`p-6 rounded-xl bg-gradient-to-r ${theme.bgGradient} border ${theme.border} relative overflow-hidden`}>
                                             <div className="relative z-10">
                                                 <h4 className={`flex items-center gap-2 ${theme.title} font-bold text-xs uppercase tracking-wider mb-3`}>

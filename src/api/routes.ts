@@ -108,17 +108,19 @@ export async function rankingRoutes(fastify: FastifyInstance) {
     });
 
     // 5. Player Insights
-    interface InsightsQuery extends HistoryQuery { page?: number; limit?: number; sort?: 'asc' | 'desc'; }
+    interface InsightsQuery extends HistoryQuery { page?: number; limit?: number; sort?: 'asc' | 'desc'; startDate?: string; endDate?: string; }
     fastify.get<{ Params: PlayerParams, Querystring: InsightsQuery }>('/api/player/:puuid/insights', async (request, reply) => {
         const { puuid } = request.params;
-        const { queue = 'SOLO', page = 1, limit = 10, sort = 'desc' } = request.query;
+        const { queue = 'SOLO', page = 1, limit = 10, sort = 'desc', startDate, endDate } = request.query;
         const q = queue === 'FLEX' ? 'FLEX' : 'SOLO';
         const p = Number(page) || 1;
         const l = Number(limit) || 10;
         const s = sort === 'asc' ? 'asc' : 'desc';
 
         try {
-            const data = await rankingService.getPlayerInsights(puuid, q, p, l, s);
+            const start = startDate ? new Date(startDate) : undefined;
+            const end = endDate ? new Date(endDate) : undefined;
+            const data = await rankingService.getPlayerInsights(puuid, q, p, l, s, start, end);
             if (!data) {
                 // Return empty/default object instead of 404 to satisfy frontend types
                 return {
@@ -285,6 +287,25 @@ export async function rankingRoutes(fastify: FastifyInstance) {
             const start = startDate ? new Date(startDate) : undefined;
             const end = endDate ? new Date(endDate) : undefined;
             return await rankingService.getHallOfShame(q, start, end);
+        } catch (error) {
+            console.error(error);
+            reply.status(500).send({ error: 'Internal Server Error' });
+        }
+    });
+
+    // 9.5 Community Relations (Social Analytics)
+    interface RelationsQuery { queue?: string; startDate?: string; endDate?: string; }
+    fastify.get<{ Querystring: RelationsQuery }>('/api/community/relations', async (request, reply) => {
+        const { queue = 'SOLO', startDate, endDate } = request.query;
+        // Map 'BOTH' or specific queue
+        let q: 'SOLO' | 'FLEX' | 'BOTH' = 'SOLO';
+        if (queue === 'FLEX') q = 'FLEX';
+        if (queue === 'BOTH') q = 'BOTH';
+
+        try {
+            const start = startDate ? new Date(startDate) : undefined;
+            const end = endDate ? new Date(endDate) : undefined;
+            return await rankingService.getCommunityRelations(q, start, end);
         } catch (error) {
             console.error(error);
             reply.status(500).send({ error: 'Internal Server Error' });

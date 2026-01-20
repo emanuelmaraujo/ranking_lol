@@ -30,6 +30,14 @@ const TIER_LABELS = {
     2800: "Mestre+"
 };
 
+const RANK_VALUES: Record<string, number> = {
+    'IV': 0,
+    'III': 100,
+    'II': 200,
+    'I': 300,
+    '': 0
+};
+
 export function PdlChart({ history, theme }: { history: PlayerHistoryEntry[], theme: TierTheme }) {
     if (!history || history.length === 0) return (
         <div className={`flex items-center justify-center h-full text-zinc-500 text-sm`}>
@@ -48,14 +56,25 @@ export function PdlChart({ history, theme }: { history: PlayerHistoryEntry[], th
     const sortedHistory = Array.from(uniqueDays.values())
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    const data = sortedHistory.map(h => ({
-        date: new Date(h.date).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' }),
-        value: (TIER_VALUES[h.tier] || 0) + h.lp,
-        tier: h.tier,
-        rank: h.rank,
-        lp: h.lp,
-        fullDate: new Date(h.date).toLocaleDateString()
-    }));
+    const data = sortedHistory.map(h => {
+        const tierBase = TIER_VALUES[h.tier] || 0;
+        // If Master+, rank is irrelevant for value, just LP adds to base.
+        // But for consistency below Master, we add Rank.
+        let val = tierBase;
+        if (tierBase < 2800) {
+            val += (RANK_VALUES[h.rank] || 0);
+        }
+        val += h.lp;
+
+        return {
+            date: new Date(h.date).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' }),
+            value: val,
+            tier: h.tier,
+            rank: h.rank,
+            lp: h.lp,
+            fullDate: new Date(h.date).toLocaleDateString()
+        };
+    });
 
     // Calculate domain padding
     const minValue = Math.min(...data.map(d => d.value));

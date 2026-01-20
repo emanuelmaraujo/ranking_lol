@@ -13,9 +13,10 @@ interface WeeklyReportProps {
         winRate: string;
         pdlDelta: number;
     };
+    title?: string;
 }
 
-export function WeeklyReportCard({ theme, report }: WeeklyReportProps) {
+export function WeeklyReportCard({ theme, report, title }: WeeklyReportProps) {
     // 1. Weekly Date Range
     const startOfWeek = getStartOfWeek();
     const endOfWeek = new Date(startOfWeek);
@@ -40,7 +41,7 @@ export function WeeklyReportCard({ theme, report }: WeeklyReportProps) {
 
             <div className="relative z-10">
                 <h3 className={`text-sm font-[family-name:var(--font-outfit)] font-bold uppercase tracking-widest ${theme.colors.textSecondary} mb-4 flex items-center gap-2`}>
-                    <Activity size={14} /> Performance Semanal
+                    <Activity size={14} /> {title || 'Performance Semanal'}
                 </h3>
 
                 <div className="grid grid-cols-2 gap-6">

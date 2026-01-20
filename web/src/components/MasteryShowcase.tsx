@@ -42,38 +42,50 @@ export function MasteryShowcase({ masteries, theme }: { masteries: Mastery[], th
                 </div>
             </div>
 
-            {/* Top 3 Showcase - Visual Horizontal Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-1 p-1 h-auto md:h-48">
+            {/* Top 3 Showcase - Visual Horizontal Banners */}
+            <div className="flex flex-col gap-2 p-2">
                 {top3.map((m, i) => (
-                    <div key={m.championId} className="relative group overflow-hidden rounded-lg cursor-default h-32 md:h-auto">
-                        {/* Splash Art Info */}
+                    <div key={m.championId} className="relative group overflow-hidden rounded-lg cursor-default h-24 shadow-lg border border-white/5 w-full">
+                        {/* Splash Art Banner Slice */}
                         <div className="absolute inset-0 z-0">
                             <img
                                 src={m.skin?.splashUrl || `${CHAMPION_SPLASH_BASE}/${normalizeChampionName(m.championName)}_0.jpg`}
-                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-60 group-hover:opacity-80"
+                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-60 group-hover:opacity-80"
                                 alt={m.skin?.name || m.championName}
                                 style={{ objectPosition: 'center 20%' }}
                             />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+                            {/* Gradient Overlay for Text Readability */}
+                            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent" />
                         </div>
 
-                        {/* Content */}
-                        <div className="absolute bottom-0 inset-x-0 p-3 z-10 flex flex-col justify-end">
-                            <div className="flex items-center justify-between mb-0.5">
-                                <span className="text-sm font-[family-name:var(--font-outfit)] font-black text-white uppercase tracking-wider drop-shadow-md opacity-90">{m.championName}</span>
-                                {i === 0 && <Star size={12} className="text-yellow-400 fill-yellow-400 animate-pulse" />}
+                        {/* Content - Left Aligned */}
+                        <div className="absolute inset-0 p-4 z-10 flex items-center justify-between">
+
+                            {/* Left: Champ Name & Rank */}
+                            <div className="flex items-center gap-4">
+                                {/* Rank Badge/Icon could go here, or just text */}
+                                <div className={`w-10 h-10 rounded-full ${theme.colors.hex} bg-opacity-20 flex items-center justify-center border border-white/10 backdrop-blur-md`}>
+                                    {i === 0 ? <Star size={18} className="text-yellow-400 fill-yellow-400" /> : <span className="text-sm font-bold text-white">#{i + 1}</span>}
+                                </div>
+
+                                <div>
+                                    <h4 className="text-xl font-[family-name:var(--font-outfit)] font-black text-white uppercase tracking-wider drop-shadow-md leading-none mb-1">
+                                        {m.championName}
+                                    </h4>
+                                    <div className={`inline-flex px-1.5 py-0.5 rounded ${theme.colors.accent} bg-opacity-20 border border-white/20 backdrop-blur-sm`}>
+                                        <span className={`text-[10px] font-bold ${theme.colors.accent} uppercase tracking-wider`}>
+                                            Maestria {m.level}
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
 
-                            {/* Emphasized Stats */}
-                            <div className="flex items-end gap-2">
-                                <span className={`text-2xl leading-none font-[family-name:var(--font-outfit)] font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]`}>
+                            {/* Right: Points */}
+                            <div className="text-right">
+                                <span className={`text-2xl leading-none font-[family-name:var(--font-outfit)] font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] block`}>
                                     {new Intl.NumberFormat('en', { notation: 'compact' }).format(m.points)}
                                 </span>
-                                <div className={`px-1.5 py-0.5 rounded ${theme.colors.accent} bg-opacity-20 border border-white/20 backdrop-blur-sm mb-0.5`}>
-                                    <span className={`text-[10px] font-bold ${theme.colors.accent} uppercase tracking-wider`}>
-                                        M{m.level}
-                                    </span>
-                                </div>
+                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Pontos</span>
                             </div>
                         </div>
                     </div>

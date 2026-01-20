@@ -404,15 +404,24 @@ export class RankingService {
     /**
      * Get Player Insights & Stats
      */
-    async getPlayerInsights(puuid: string, queueType: 'SOLO' | 'FLEX', page: number = 1, limit: number = 10, sortDir: 'asc' | 'desc' = 'desc') {
+    async getPlayerInsights(puuid: string, queueType: 'SOLO' | 'FLEX', page: number = 1, limit: number = 10, sortDir: 'asc' | 'desc' = 'desc', startDate?: Date, endDate?: Date) {
         const player = await prisma.player.findUnique({ where: { puuid } });
         if (!player) return null;
+
+        // Date Filter Clause
+        const dateFilter: any = {};
+        if (startDate || endDate) {
+            dateFilter.gameCreation = {};
+            if (startDate) dateFilter.gameCreation.gte = startDate;
+            if (endDate) dateFilter.gameCreation.lte = endDate;
+        }
 
         // Count Total for Pagination
         const totalMatches = await prisma.matchScore.count({
             where: {
                 playerId: puuid,
-                queueType: queueType
+                queueType: queueType,
+                match: dateFilter
             }
         });
 
@@ -420,7 +429,8 @@ export class RankingService {
         const scores: any[] = await prisma.matchScore.findMany({
             where: {
                 playerId: puuid,
-                queueType: queueType
+                queueType: queueType,
+                match: dateFilter
             } as any,
             orderBy: {
                 match: {
@@ -432,10 +442,13 @@ export class RankingService {
             include: { match: true }
         });
 
-        // Aggregation Query (All Time)
-        // Includes Playstyle metrics (Performance, Objectives, Discipline)
+        // Aggregation Query (All Time OR Filtered)
         const aggregations = await prisma.matchScore.aggregate({
-            where: { playerId: puuid, queueType: queueType } as any,
+            where: {
+                playerId: puuid,
+                queueType: queueType,
+                match: dateFilter
+            } as any,
             _avg: {
                 matchScore: true,
                 kills: true,
@@ -451,7 +464,12 @@ export class RankingService {
         });
 
         const wins = await prisma.matchScore.count({
-            where: { playerId: puuid, queueType: queueType, isVictory: true } as any
+            where: {
+                playerId: puuid,
+                queueType: queueType,
+                isVictory: true,
+                match: dateFilter
+            } as any
         });
 
         // KDA Calc (Total)
@@ -486,69 +504,74 @@ export class RankingService {
             };
         });
 
-        // --- Weekly Report Calculation ---
-        const startOfWeek = this.getStartDateForPeriod('WEEKLY');
+        // --- Period Report Calculation (Dynamic) ---
+        // If filters are present, use them. If not, default to Weekly for the "card" context?
+        // Actually, let's behave as:
+        // - If NO filters: Defaults to "Season/All Time" stats in the top cards, but for the "Period Report Card" we might want Weekly default.
+        // - HOWEVER, the user asked for filters to change EVERYTHING.
+        // - So "WeeklyReport" should really be "PeriodReport".
 
-        // Weekly Matches
-        const weeklyMatchesState = await prisma.matchScore.groupBy({
-            by: ['isVictory'],
-            where: {
-                playerId: puuid,
-                queueType,
-                match: { gameCreation: { gte: startOfWeek } }
-            },
-            _count: { _all: true }
-        });
+        // Logic:
+        // Use the EXACT same filters as above for the "Period Report".
+        // But we need to calculate PDL Delta for this period.
 
-        const weeklyWins = weeklyMatchesState.find(x => x.isVictory)?._count._all || 0;
-        const weeklyLosses = weeklyMatchesState.find(x => !x.isVictory)?._count._all || 0;
-        const weeklyTotal = weeklyWins + weeklyLosses;
-        const weeklyWr = weeklyTotal > 0 ? ((weeklyWins / weeklyTotal) * 100).toFixed(0) : "0";
+        // 1. Matches (Already have totals from above aggregation/count)
+        const periodWins = wins;
+        const periodLosses = totalMatches - wins;
+        const periodTotal = totalMatches;
+        const periodWr = winRate; // Already calculated correctly for the filtered period
 
-        // Weekly PDL Delta
-        // Helper to normalize LP
+        // 2. PDL Delta for the Period
         const getVal = (tier: string, rank: string, lp: number) => {
             const tierMap: any = { IRON: 0, BRONZE: 400, SILVER: 800, GOLD: 1200, PLATINUM: 1600, EMERALD: 2000, DIAMOND: 2400, MASTER: 2800, GRANDMASTER: 2800, CHALLENGER: 2800 };
-            const rankMap: any = { 'IV': 0, 'III': 100, 'II': 200, 'I': 300, '': 0 }; // Added empty handling
+            const rankMap: any = { 'IV': 0, 'III': 100, 'II': 200, 'I': 300, '': 0 };
             const tierVal = tierMap[tier] || 0;
             const rankVal = rankMap[rank] || 0;
             if (tierVal >= 2800) return tierVal + lp;
             return tierVal + rankVal + lp;
         };
 
-        // Get Latest Snapshot (Current)
-        const currentSnapshot = await prisma.rankSnapshot.findFirst({
-            where: { playerId: puuid, queueType },
-            orderBy: { createdAt: 'desc' }
-        });
+        // Determine Start and End Snapshots based on Filters or Default
+        // If startDate is provided, we compare Snapshot@StartDate vs Snapshot@EndDate/Now
+        // If NO startDate, we fall back to "Start of Week" IF we want default weekly behavior?
+        // User said: "ao selecionar o filtro todos os dados sejam alterados para o filtro".
+        // If filter is ALL, PDL Delta is Current - Season Start? Or 0?
+        // Let's assume if NO/ALL filter, we show Season Delta (Start vs Current).
 
-        // Get Baseline Snapshot (Last before startOfWeek)
-        const baselineSnapshot = await prisma.rankSnapshot.findFirst({
-            where: { playerId: puuid, queueType, createdAt: { lt: startOfWeek } },
-            orderBy: { createdAt: 'desc' }
-        });
-
-        // Use logic: if no baseline, try first of week. If no current, 0.
-        let pdlDelta = 0;
-        if (currentSnapshot) {
-            const currentVal = getVal(currentSnapshot.tier, currentSnapshot.rank, currentSnapshot.lp);
-            let baseVal = currentVal; // Default to 0 change
-
-            if (baselineSnapshot) {
-                baseVal = getVal(baselineSnapshot.tier, baselineSnapshot.rank, baselineSnapshot.lp);
-            } else {
-                // Try first snapshot of the week
-                const firstOfWeek = await prisma.rankSnapshot.findFirst({
-                    where: { playerId: puuid, queueType, createdAt: { gte: startOfWeek } },
-                    orderBy: { createdAt: 'asc' }
-                });
-                if (firstOfWeek) {
-                    baseVal = getVal(firstOfWeek.tier, firstOfWeek.rank, firstOfWeek.lp);
-                }
-            }
-            pdlDelta = currentVal - baseVal;
+        let queryStart = startDate;
+        if (!queryStart && !endDate) {
+            // If completely empty (ALL), use VERY OLD date to capture Season Start
+            // Or explicitly handle "Season Evolution".
+            // For "Period Report Card", if ALL is selected, maybe we show Season stats?
+            queryStart = new Date('2024-01-01'); // Safe past
         }
 
+        // Find snapshot closest to Start (or before it)
+        const baselineSnapshot = await prisma.rankSnapshot.findFirst({
+            where: { playerId: puuid, queueType, createdAt: { lte: queryStart || new Date() } },
+            orderBy: { createdAt: 'desc' }
+        }) || await prisma.rankSnapshot.findFirst({
+            // Fallback: If no snapshot BEFORE start, take the FIRST one AFTER start
+            where: { playerId: puuid, queueType, createdAt: { gte: queryStart || new Date('2020-01-01') } },
+            orderBy: { createdAt: 'asc' }
+        });
+
+        // Find snapshot at End (or current)
+        const currentSnapshot = await prisma.rankSnapshot.findFirst({
+            where: {
+                playerId: puuid,
+                queueType,
+                createdAt: endDate ? { lte: endDate } : undefined
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        let pdlDelta = 0;
+        if (baselineSnapshot && currentSnapshot) {
+            const startVal = getVal(baselineSnapshot.tier, baselineSnapshot.rank, baselineSnapshot.lp);
+            const endVal = getVal(currentSnapshot.tier, currentSnapshot.rank, currentSnapshot.lp);
+            pdlDelta = endVal - startVal;
+        }
 
         return {
             stats: {
@@ -572,10 +595,10 @@ export class RankingService {
             },
             // NEW: Backend Source of Truth
             weeklyReport: {
-                wins: weeklyWins,
-                losses: weeklyLosses,
-                total: weeklyTotal,
-                winRate: weeklyWr,
+                wins: periodWins,
+                losses: periodLosses,
+                total: periodTotal,
+                winRate: periodWr, // String with %
                 pdlDelta
             },
             playstyle: {
@@ -1025,7 +1048,7 @@ export class RankingService {
         const uniqueFeats: any[] = [];
 
         // Track Win Streaks
-        const currentStreaks: Record<string, { count: number, start: Date, matchId: string, champion: string, skinId: number }> = {};
+        const currentStreaks: Record<string, { count: number, start: Date, matchId: string, championName: string, skinId: number }> = {};
 
         // Populate Aggregations & Single Game Checks
         for (const s of scores) {
@@ -1036,29 +1059,29 @@ export class RankingService {
             // --- Win Streak Logic ---
             if (s.isVictory) {
                 if (!currentStreaks[pid]) {
-                    currentStreaks[pid] = { count: 0, start: s.match.gameCreation, matchId: s.matchId, champion: s.championName, skinId: metrics?.skinId || 0 };
+                    currentStreaks[pid] = { count: 0, start: s.match.gameCreation, matchId: s.matchId, championName: s.championName, skinId: metrics?.skinId || 0 };
                 }
                 currentStreaks[pid].count++;
                 currentStreaks[pid].matchId = s.matchId; // Update to latest match in streak
-                currentStreaks[pid].champion = s.championName;
+                currentStreaks[pid].championName = s.championName;
                 currentStreaks[pid].skinId = metrics?.skinId || 0;
             } else {
                 // Check if broken streak was epic
-                if (currentStreaks[pid] && currentStreaks[pid].count >= 4) {
+                if (currentStreaks[pid] && currentStreaks[pid].count >= 7) {
                     uniqueFeats.push({
                         ...s.player,
                         value: currentStreaks[pid].count,
                         label: 'O Imparável',
                         type: 'WIN_STREAK',
                         matchId: currentStreaks[pid].matchId,
-                        championName: currentStreaks[pid].champion,
+                        championName: currentStreaks[pid].championName,
                         skinId: currentStreaks[pid].skinId,
                         date: currentStreaks[pid].start,
                         detail: 'Sequência de Vitórias'
                     });
                 }
                 // Reset
-                currentStreaks[pid] = { count: 0, start: new Date(), matchId: '', champion: '', skinId: 0 };
+                currentStreaks[pid] = { count: 0, start: new Date(), matchId: '', championName: '', skinId: 0 };
             }
 
             if (!playerStats[s.playerId]) {
@@ -1074,7 +1097,7 @@ export class RankingService {
             if (pentas > 0) {
                 // Push one per penta occurrence
                 for (let i = 0; i < pentas; i++) {
-                    uniqueFeats.push({ ...s.player, type: 'PENTA', label: 'A Lenda Viva', matchId: s.matchId, champion: s.championName, skinId: metrics?.skinId || 0, value: 5, date: s.match.gameCreation });
+                    uniqueFeats.push({ ...s.player, type: 'PENTA', label: 'A Lenda Viva', matchId: s.matchId, championName: s.championName, skinId: metrics?.skinId || 0, value: 5, date: s.match.gameCreation });
                 }
             }
 
@@ -1082,24 +1105,57 @@ export class RankingService {
             const quadras = Number(metrics?.quadraKills || 0);
             if (quadras > 0 && pentas === 0) {
                 for (let i = 0; i < quadras; i++) {
-                    uniqueFeats.push({ ...s.player, type: 'QUADRA', label: 'Quase Lenda', matchId: s.matchId, champion: s.championName, skinId: metrics?.skinId || 0, value: 4, date: s.match.gameCreation });
+                    uniqueFeats.push({ ...s.player, type: 'QUADRA', label: 'Quase Lenda', matchId: s.matchId, championName: s.championName, skinId: metrics?.skinId || 0, value: 4, date: s.match.gameCreation });
                 }
             }
 
             if (s.isVictory && s.deaths === 0 && s.kills >= 7) {
-                uniqueFeats.push({ ...s.player, type: 'PERFECT', label: 'Intocável', matchId: s.matchId, champion: s.championName, skinId: metrics?.skinId || 0, value: `${s.kills}/${s.deaths}/${s.assists}`, date: s.match.gameCreation });
+                uniqueFeats.push({ ...s.player, type: 'PERFECT', label: 'Intocável', matchId: s.matchId, championName: s.championName, skinId: metrics?.skinId || 0, value: `${s.kills}/${s.deaths}/${s.assists}`, date: s.match.gameCreation });
             }
 
             const gd15 = Number(challenges.goldDiffAt15 || 0);
             if (s.isVictory && gd15 < -5000) {
-                uniqueFeats.push({ ...s.player, type: 'COMEBACK', label: 'O Milagre', matchId: s.matchId, champion: s.championName, skinId: metrics?.skinId || 0, value: Math.abs(gd15).toFixed(0), detail: 'Ouro -5k @15', date: s.match.gameCreation });
+                uniqueFeats.push({ ...s.player, type: 'COMEBACK', label: 'O Milagre', matchId: s.matchId, championName: s.championName, skinId: metrics?.skinId || 0, value: Math.abs(gd15).toFixed(0), detail: 'Ouro -5k @15', date: s.match.gameCreation });
             }
 
             // Stomp (Speedrun) - Stricter: 15m (900s) <= Duration < 18min (1080s) AND Gold Lead > 6k
             // Minimum 15m ensures we filter out Remakes and Early Surrenders (AFK)
             if (s.isVictory && s.match.gameDuration >= 900 && s.match.gameDuration < 1080 && gd15 > 6000) {
-                uniqueFeats.push({ ...s.player, type: 'STOMP', label: 'Speedrun', matchId: s.matchId, champion: s.championName, skinId: metrics?.skinId || 0, value: `${(s.match.gameDuration / 60).toFixed(0)} min`, date: s.match.gameCreation });
+                uniqueFeats.push({ ...s.player, type: 'STOMP', label: 'Speedrun', matchId: s.matchId, championName: s.championName, skinId: metrics?.skinId || 0, value: `${(s.match.gameDuration / 60).toFixed(0)} min`, date: s.match.gameCreation });
             }
+
+            // --- New Feats ---
+
+            // 1. Butcher (O Açougueiro)
+            if (s.kills >= 23) {
+                uniqueFeats.push({ ...s.player, type: 'BUTCHER', label: 'O Açougueiro', matchId: s.matchId, championName: s.championName, skinId: metrics?.skinId || 0, value: s.kills, detail: 'Abates', date: s.match.gameCreation });
+            }
+
+            // 2. Visionary (Map Hack)
+            const visionScore = Number(metrics?.visionScore || 0);
+            if (visionScore >= 95) {
+                uniqueFeats.push({ ...s.player, type: 'VISIONARY', label: 'Map Hack', matchId: s.matchId, championName: s.championName, skinId: metrics?.skinId || 0, value: visionScore, detail: 'Placar de Visão', date: s.match.gameCreation });
+            }
+
+            // 3. Tank God (Muralha)
+            const dmgTaken = Number(metrics?.totalDamageTaken || 0);
+            if (dmgTaken > 60000 && s.deaths <= 5) { // Increased tolerance for deaths a bit as dmg implies fighting
+                uniqueFeats.push({ ...s.player, type: 'TANK_GOD', label: 'A Muralha', matchId: s.matchId, championName: s.championName, skinId: metrics?.skinId || 0, value: (dmgTaken / 1000).toFixed(0) + 'k', detail: 'Dano Tankado', date: s.match.gameCreation });
+            }
+
+            // 4. Marathon (Maratona)
+            if (s.isVictory && s.match.gameDuration > 2700) { // 45 min
+                const min = Math.floor(s.match.gameDuration / 60);
+                uniqueFeats.push({ ...s.player, type: 'MARATHON', label: 'Maratona', matchId: s.matchId, championName: s.championName, skinId: metrics?.skinId || 0, value: `${min} min`, detail: 'Teste de Resistência', date: s.match.gameCreation });
+            }
+
+            // 5. Solo Carry (1v9)
+            // Relies on challenges.killParticipation usually (0.0 to 1.0)
+            const kp = Number(challenges.killParticipation || 0);
+            if (s.isVictory && kp >= 0.90 && (s.kills + s.assists) >= 10) {
+                uniqueFeats.push({ ...s.player, type: 'SOLO_CARRY', label: '1v9', matchId: s.matchId, championName: s.championName, skinId: metrics?.skinId || 0, value: (kp * 100).toFixed(0) + '%', detail: 'Part. em Abates', date: s.match.gameCreation });
+            }
+
 
 
             // --- Single Game Records ---
@@ -1223,7 +1279,53 @@ export class RankingService {
         }
 
         // Sort Unique Feats by date desc
-        uniqueFeats.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        // DEDUPLICATION LOGIC
+        // 1. Group by Key
+        const groupedFeats: Record<string, any[]> = {};
+
+        for (const f of uniqueFeats) {
+            let key = `${f.puuid}-${f.type}`;
+            // If Win Streak, distinct by Champion
+            if (f.type === 'WIN_STREAK') {
+                key += `-${f.championName}`;
+            }
+
+            if (!groupedFeats[key]) groupedFeats[key] = [];
+            groupedFeats[key].push(f);
+        }
+
+        const finalUniqueFeats: any[] = [];
+
+        // 2. Select Best & Count Occurrences
+        for (const key in groupedFeats) {
+            const list = groupedFeats[key];
+            const occurrences = list.length;
+
+            // Sort logic to find "best"
+            // For most feats, higher value is better.
+            // For PENTA/QUADRA, value is constant (5 or 4), so latest date is fine.
+            // Value is often string (e.g. "90%"), need robust parse or just pick latest date for equality.
+
+            // Let's sort by Date DESC first (latest)
+            list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+            // Then if numerical value present, potentially pick highest?
+            // BUTCHER (Kills) -> Higher is better
+            // VISIONARY (Score) -> Higher is better
+            // TANK_GOD (Dmg) -> Higher is better (parsing '60k' is hard, maybe just rely on date or trust the sorting)
+
+            // Simpler approach: Keep the LATEST occurrence as the representative card.
+            // Exception: If we want to show the "Highest Record", we should sort by value.
+            // Given 'value' is mixed (string/number), let's stick to LATEST for now to reflect "Freshness".
+            // Or if user wants "Record", we need to parse. For now, Latest.
+
+            const bestFeat = list[0]; // Latest
+            bestFeat.occurrences = occurrences;
+            finalUniqueFeats.push(bestFeat);
+        }
+
+        // Sort Final List by Date
+        finalUniqueFeats.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
         return {
             pentakilleiro,
@@ -1241,7 +1343,7 @@ export class RankingService {
             reiDaSelva,
             gigaChad,
             // Unique
-            uniqueFeats
+            uniqueFeats: finalUniqueFeats
         };
     }
 
@@ -1953,26 +2055,40 @@ export class RankingService {
     }
 
     /**
-     * Get Community Duos (Social Stats)
+     * Get Community Relations (Social Analytics)
+     * Analyzes: Duos, Squads, Synergy, Anti-Synergy, Social Behaviors
      */
-    async getCommunityDuos(queueType: 'SOLO' | 'FLEX', startDate?: Date, endDate?: Date) {
-        // Fetch Matches
+    async getCommunityRelations(queueType: 'SOLO' | 'FLEX' | 'BOTH', startDate?: Date, endDate?: Date) {
+        // 1. Fetch Matches (Optimized Select)
+        if (!startDate) startDate = new Date('2024-01-01'); // Safety
+
+        const whereClause: any = {
+            gameCreation: { gte: startDate, lte: endDate }
+        };
+
+        if (queueType !== 'BOTH') {
+            whereClause.queueType = queueType;
+        }
+
         const matches = await prisma.match.findMany({
-            where: {
-                queueType,
-                gameCreation: { gte: startDate, lte: endDate }
-            },
+            where: whereClause,
             include: {
                 scores: {
                     select: {
                         playerId: true,
                         isVictory: true,
                         matchScore: true,
+                        lane: true, // For Lane Pairing
+                        queueType: true,
+                        metrics: true, // For deeply specific stats if needed
                         player: {
                             select: {
+                                puuid: true,
                                 gameName: true,
                                 tagLine: true,
-                                profileIconId: true
+                                profileIconId: true,
+                                tier: true,
+                                rank: true
                             }
                         }
                     }
@@ -1980,87 +2096,237 @@ export class RankingService {
             }
         });
 
-        const duoTracker: Record<string, { p1: any, p2: any, wins: number, games: number, scoreSum: number }> = {};
+        // Data Structures
+        const playerStats: Record<string, {
+            player: any,
+            games: number,
+            wins: number,
+            soloGames: number,
+            flexGames: number,
+            totalScore: number
+        }> = {};
+
+        // Duo Key: "P1_ID|P2_ID" (alphabetical sort to ensure uniqueness)
+        const relations: Record<string, {
+            p1: any, p2: any,
+            games: number, wins: number,
+            scoreSumTogether: number,
+            lanes: Record<string, number>, // "TOP-JUNGLE": count
+            queueModes: Set<string>,
+            matches: any[]
+        }> = {};
+
         const squadTracker: Record<string, { members: any[], wins: number, games: number, scoreSum: number }> = {};
 
+        // 2. Pass 1: Aggregation
         for (const match of matches) {
-            // Group by Team (Win vs Loss)
+            // Split by Team
             const winners = match.scores.filter(s => s.isVictory);
             const losers = match.scores.filter(s => !s.isVictory);
 
-            const processTeam = (team: typeof winners) => {
+            const teams = [winners, losers];
+
+            // Update Individual Stats first
+            match.scores.forEach(s => {
+                if (!playerStats[s.playerId]) {
+                    playerStats[s.playerId] = {
+                        player: s.player, games: 0, wins: 0,
+                        soloGames: 0, flexGames: 0, totalScore: 0
+                    };
+                }
+                const p = playerStats[s.playerId];
+                p.games++;
+                p.totalScore += s.matchScore;
+                if (s.isVictory) p.wins++;
+                if (match.queueType === 'SOLO') p.soloGames++;
+                else p.flexGames++;
+            });
+
+            // Process Teams for Relations
+            teams.forEach(team => {
                 if (team.length < 2) return;
 
-                // Sort players by ID to ensure consistent keys
+                // Sort by ID
                 const players = team.sort((a, b) => a.playerId.localeCompare(b.playerId));
-                const pIds = players.map(p => p.playerId).join('|');
 
-                // Flex Squad (3+ members)
-                if (queueType === 'FLEX' && players.length >= 3) {
+                // A) Squads (3+) - Only relevant for FLEX or specific analysis
+                if (players.length >= 3) { // Even in SoloQ technically imposs, but good for custom games or flex
+                    const pIds = players.map(p => p.playerId).join('|');
                     if (!squadTracker[pIds]) {
-                        squadTracker[pIds] = {
-                            members: players.map(p => p.player),
-                            wins: 0,
-                            games: 0,
-                            scoreSum: 0
-                        };
+                        squadTracker[pIds] = { members: players.map(p => p.player), wins: 0, games: 0, scoreSum: 0 };
                     }
                     squadTracker[pIds].games++;
                     squadTracker[pIds].scoreSum += players.reduce((acc, p) => acc + p.matchScore, 0);
                     if (team[0].isVictory) squadTracker[pIds].wins++;
                 }
 
-                // Duos (All permutations of size 2)
+                // B) Relations (Duos - Pairwise)
+                // In a team of 5, we have 10 pairs. 
+                // We map ALL of them to build the network graph.
                 for (let i = 0; i < players.length; i++) {
                     for (let j = i + 1; j < players.length; j++) {
                         const p1 = players[i];
                         const p2 = players[j];
                         const key = `${p1.playerId}|${p2.playerId}`;
 
-                        if (!duoTracker[key]) {
-                            duoTracker[key] = {
+                        if (!relations[key]) {
+                            relations[key] = {
                                 p1: p1.player,
                                 p2: p2.player,
-                                wins: 0,
-                                games: 0,
-                                scoreSum: 0
+                                games: 0, wins: 0,
+                                scoreSumTogether: 0,
+                                lanes: {},
+                                queueModes: new Set(),
+                                matches: []
                             };
                         }
-                        duoTracker[key].games++;
-                        duoTracker[key].scoreSum += (p1.matchScore + p2.matchScore);
-                        if (team[0].isVictory) duoTracker[key].wins++;
+                        const r = relations[key];
+                        r.games++;
+                        r.scoreSumTogether += (p1.matchScore + p2.matchScore);
+                        if (team[0].isVictory) r.wins++;
+                        r.queueModes.add(match.queueType);
+
+                        // Lane Pairing (Sort lanes alphabetically: "JUNGLE|TOP")
+                        const lanePair = [p1.lane, p2.lane].sort().join('|');
+                        if (!r.lanes[lanePair]) r.lanes[lanePair] = 0;
+                        r.lanes[lanePair]++;
                     }
                 }
-            };
-
-            processTeam(winners);
-            processTeam(losers);
+            });
         }
 
-        // Casal 20 (Best Duo by Wins -> Winrate)
-        const duos = Object.values(duoTracker)
-            .filter(d => d.games >= 3) // Min games
-            .map(d => ({
-                ...d,
-                winRate: (d.wins / d.games) * 100,
-                avgScore: d.scoreSum / (d.games * 2),
-                synergy: (d.wins / d.games) * 100 // Placeholder for deeper synergy
-            }))
-            .sort((a, b) => b.wins - a.wins || b.winRate - a.winRate)
+        // 3. Analysis & Insights
+        const minGames = 3; // Filter noise
+        const computedRelations = Object.values(relations).map(r => {
+            if (r.games < minGames) return null;
+
+            const wr = (r.wins / r.games) * 100;
+            const avgScoreTogether = r.scoreSumTogether / (r.games * 2);
+
+            // Fetch Individual Baselines
+            const p1Base = playerStats[r.p1.puuid];
+            const p2Base = playerStats[r.p2.puuid];
+            const avgScoreAlone = ((p1Base.totalScore / p1Base.games) + (p2Base.totalScore / p2Base.games)) / 2;
+            const avgWrAlone = (((p1Base.wins / p1Base.games) + (p2Base.wins / p2Base.games)) / 2) * 100;
+
+            const deltaScore = avgScoreTogether - avgScoreAlone;
+            const deltaWr = wr - avgWrAlone;
+
+            // Synergy Score Formula
+            // Base: WR (50%) + DeltaScore (30%) + Bonus for sheer volume (20%)
+            // We want to highlight duos that WIN and PLAY WELL together.
+            let synergyScore = (wr * 0.5) + (deltaScore * 2);
+            // Add volume bonus (diminishing returns)
+            synergyScore += Math.min(20, r.games);
+
+            // Find Main Lane Pair
+            const mainLane = Object.entries(r.lanes).sort((a, b) => b[1] - a[1])[0][0];
+
+            return {
+                players: [r.p1, r.p2],
+                games: r.games,
+                wins: r.wins,
+                winRate: wr,
+                avgScoreTogether,
+                deltaScore, // +Improved when together, -Worse when together
+                deltaWr,
+                synergyScore,
+                mainLane,
+                queues: Array.from(r.queueModes)
+            };
+        }).filter(Boolean) as any[];
+
+        // A) Lists
+        const topSynergies = [...computedRelations].sort((a, b) => b.synergyScore - a.synergyScore).slice(0, 5);
+
+        // Anti-Sinergia: Positive (or high) games, but terrible WR together compared to alone OR terrible DeltaScore
+        const antiSynergies = [...computedRelations]
+            .filter(r => r.deltaWr < -5 || r.deltaScore < -2 || r.winRate < 40)
+            .sort((a, b) => a.deltaWr - b.deltaWr) // Sort by biggest drop in WR
             .slice(0, 5);
 
-        // Bonde (Best Squad by Games -> Score)
-        const squads = Object.values(squadTracker)
+        // B) Specific Behaviors
+
+        // 1. Solo Warrior (Plays a lot, but rarely duos in matching filtered queues)
+        // Check % of games that are solo.
+        // BUT: 'matches' query might be filtered. We need to look at 'playerStats' vs global context?
+        // Let's use the local 'playerStats' (games in this period) vs 'relations'.
+        // Actually, playerStats counts ALL games in the query.
+        // We need to know how many of those were in a PARTY. 
+        // -> This requires checking the match metadata or deducing from relations.
+        // Easier: We iterate matches again? No.
+        // Approximate: Sum up games from relations? No, that double counts.
+        // Accurate way: Start with 0 party games. In aggregation loop, if team.length > 1, increment partyGames for each member.
+        // Let's do a quick post-calc or modifying the Aggregation loop (Step 2).
+        // For now, let's assume we didn't track "Party Games" explicitly in step 2.
+        // REVISIT Step 2 -> Added logic? No, too risky to change loop now. 
+        // Let's deduce: If a player is in NO high-game relation, are they solo? Not necessarily, they could play with randoms.
+        // "Solo Warrior" = Games > 10 AND FlexGames == 0 ? No, could be Solo Duo.
+        // Let's skip precise "Solo Count" for this iteration to avoid O(N) re-loop. 
+        // Alternative: "Flex Only" is easy (SoloGames == 0 in playerStats).
+
+        // Flex Only
+        const flexOnly = Object.values(playerStats)
+            .filter(p => p.flexGames > 5 && p.soloGames === 0)
+            .sort((a, b) => b.flexGames - a.flexGames)
+            .slice(0, 5);
+
+        // True Friendship (High Games, Low WR, but still playing)
+        const friendship = computedRelations
+            .filter(r => r.games > 5 && r.winRate < 45)
+            .sort((a, b) => b.games - a.games)
+            .slice(0, 3);
+
+        // Carried (Backpack) - One Score is much higher than other
+        // Need to store individual scores in relation to calc this.
+        // Skipping for now to keep payload light.
+
+        // Bonde (Squads)
+        const bestSquads = Object.values(squadTracker)
             .filter(s => s.games >= 2)
             .map(s => ({
-                ...s,
-                avgScore: s.scoreSum / (s.games * s.members.length)
+                members: s.members,
+                games: s.games,
+                wins: s.wins,
+                winRate: (s.wins / s.games) * 100,
+                score: s.scoreSum / (s.games * s.members.length) // Avg Score per person
             }))
-            .sort((a, b) => b.games - a.games || b.avgScore - a.avgScore)
+            .sort((a, b) => b.games - a.games || b.score - a.score)
             .slice(0, 5);
 
-        return { duos, squads };
+        return {
+            period: { start: startDate, end: endDate },
+            stats: {
+                analyzedMatches: matches.length,
+                analyzedPlayers: Object.keys(playerStats).length,
+                totalRelations: Object.keys(relations).length
+            },
+
+            // Lists
+            topSynergies: topSynergies.map(s => ({ ...s, label: 'Sinergia Alta', type: 'GOOD' })),
+            antiSynergies: antiSynergies.map(s => ({ ...s, label: 'Anti-Sinergia', type: 'BAD' })),
+
+            // Special Cards
+            highlights: {
+                squads: bestSquads,
+                flexOnly: flexOnly.map(p => ({
+                    player: p.player,
+                    value: p.flexGames,
+                    label: 'Só Flex',
+                    detail: '0 Rankeds Solo'
+                })),
+                friendship: friendship.map(f => ({
+                    players: f.players,
+                    value: f.games,
+                    label: 'Amizade Verdadeira',
+                    detail: `${f.winRate.toFixed(0)}% WR`
+                })),
+            }
+        };
     }
+
+    // Legacy support alias if needed, or we just remove it since we updated frontend
+    // getCommunityDuos(...) { return this.getCommunityRelations(...); }
 
     /**
      * Get Match Details with Lazy Enriched Caching
@@ -2075,21 +2341,23 @@ export class RankingService {
 
         if (!score) return null; // Should not happen if history lists it
 
-        // 2. Check if Cache Hit (Opponent info exists AND has new fields)
+        // Check if Cache Hit (Opponent info exists AND has new fields)
         const cachedOpp = score.opponentMetrics as any;
         const playerMetrics = score.metrics as any;
         // Check if Player Tankiness is "Healty" (New Formula > 5 usually. Old formula < 1)
         const isPlayerHealthy = (playerMetrics?.tankiness || 0) > 2;
+        // Check if Participants are cached
+        const hasParticipants = playerMetrics?.participants && Array.isArray(playerMetrics.participants) && playerMetrics.participants.length > 0;
 
-        // Strict check: must have turrets, kp, and tankiness to be considered "fresh" AND player data must be healthy
-        if (isPlayerHealthy && score.opponentChampionName && cachedOpp && cachedOpp.turrets !== undefined && cachedOpp.kp !== undefined) {
+        // Strict check: must have turrets, kp, and tankiness to be considered "fresh" AND player data must be healthy AND participants exist
+        if (isPlayerHealthy && hasParticipants && score.opponentChampionName && cachedOpp && cachedOpp.turrets !== undefined && cachedOpp.kp !== undefined) {
             console.log(`[Cache] Hit for Match ${matchId}`);
             // Return cached format
             return this.formatMatchDetailResponse(score, score.opponentChampionName, cachedOpp, score.opponentChampionId || 0);
         }
 
         // 3. Cache Miss: Fetch from Riot
-        console.log(`[Cache] Miss for Match ${matchId} (PlayerHealthy: ${isPlayerHealthy}). Fetching from Riot...`);
+        console.log(`[Cache] Miss for Match ${matchId} (Healthy: ${isPlayerHealthy}, Parts: ${hasParticipants}). Fetching from Riot...`);
         try {
             const matchDto = await this.riotService!.getMatchDetails(matchId);
 
@@ -2158,6 +2426,24 @@ export class RankingService {
                         (opponentPart.challenges?.riftHeraldTakedowns || 0)
                 };
 
+                // --- 6. Extract Participants for 5v5 Board ---
+                const participants = matchDto.info.participants.map((p: any) => ({
+                    puuid: p.puuid,
+                    riotIdGameName: p.riotIdGameName,
+                    riotIdTagline: p.riotIdTagline,
+                    championId: p.championId,
+                    championName: p.championName,
+                    teamId: p.teamId,
+                    role: p.teamPosition, // TOP, JUNGLE, etc.
+                    kills: p.kills,
+                    deaths: p.deaths,
+                    assists: p.assists,
+                    kda: `${p.kills}/${p.deaths}/${p.assists}`,
+                    win: p.win
+                }));
+
+                playerMetrics.participants = participants;
+
                 // SAVE TO DB
                 await prisma.matchScore.update({
                     where: { id: score.id },
@@ -2165,10 +2451,10 @@ export class RankingService {
                         opponentChampionName: oppName,
                         opponentChampionId: oppId,
                         opponentMetrics: oppMetrics,
-                        metrics: playerMetrics // <--- ALSO UPDATE PLAYER METRICS
+                        metrics: playerMetrics // <--- ALSO UPDATE PLAYER METRICS WITH PARTICIPANTS
                     }
                 });
-                console.log(`[Cache] Saved Opponent Info & Patched Player Metrics for ${matchId}`);
+                console.log(`[Cache] Saved Opponent Info, Participants & Patched Player Metrics for ${matchId}`);
             }
 
             return this.formatMatchDetailResponse(score, oppName, oppMetrics, oppId);
@@ -2324,6 +2610,9 @@ export class RankingService {
                 ],
                 lane: lane
             },
+
+            // Pass Participants through
+            participants: metrics.participants || [],
 
             insight: "Analysis ready."
         };

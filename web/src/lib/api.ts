@@ -227,8 +227,11 @@ export interface PeriodHighlights {
     objective: HighlightPlayer | null;
 }
 
-export async function getPlayerInsights(puuid: string, queue: 'SOLO' | 'FLEX' = 'SOLO', page: number = 1, limit: number = 10, sort: 'asc' | 'desc' = 'desc'): Promise<PlayerInsights> {
-    const res = await fetch(`${API_URL}/player/${puuid}/insights?queue=${queue}&page=${page}&limit=${limit}&sort=${sort}`);
+export async function getPlayerInsights(puuid: string, queue: 'SOLO' | 'FLEX' = 'SOLO', page: number = 1, limit: number = 10, sort: 'asc' | 'desc' = 'desc', startDate?: string, endDate?: string): Promise<PlayerInsights> {
+    let url = `${API_URL}/player/${puuid}/insights?queue=${queue}&page=${page}&limit=${limit}&sort=${sort}`;
+    if (startDate) url += `&startDate=${startDate}`;
+    if (endDate) url += `&endDate=${endDate}`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to fetch player insights');
     return res.json();
 }
@@ -312,9 +315,10 @@ export interface InsightPlayer {
 }
 
 export interface UniqueFeat extends InsightPlayer {
-    type: 'PENTA' | 'QUADRA' | 'PERFECT' | 'COMEBACK' | 'STOMP' | 'WIN_STREAK';
+    type: 'PENTA' | 'QUADRA' | 'PERFECT' | 'COMEBACK' | 'STOMP' | 'WIN_STREAK' | 'SOLO_CARRY' | 'BUTCHER' | 'VISIONARY' | 'TANK_GOD' | 'MARATHON';
     date: Date; // Keep as Date or string depending on backend usage, let's use Date string usually
     skinId?: number;
+    occurrences?: number;
 }
 
 export interface HallOfFameData {
@@ -449,8 +453,56 @@ export async function getCommunityFeats(period: 'DAILY' | 'WEEKLY' | 'MONTHLY' |
     return res.json();
 }
 
-export async function getCommunityDuos(period: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'GENERAL', queue: 'SOLO' | 'FLEX') {
-    const res = await fetch(`${API_URL}/insights/duos?period=${period}&queue=${queue}`, { cache: 'no-store' });
-    if (!res.ok) throw new Error('Failed to fetch duos');
+export interface RelationNode {
+    players: [{ gameName: string; tagLine: string; profileIconId: number }, { gameName: string; tagLine: string; profileIconId: number }];
+    games: number;
+    wins: number;
+    winRate: number;
+    avgScoreTogether: number;
+    deltaScore: number;
+    deltaWr: number;
+    synergyScore: number;
+    mainLane: string;
+    queues: string[];
+    label?: string;
+    type?: 'GOOD' | 'BAD';
+}
+
+export interface SocialAppStats {
+    analyzedMatches: number;
+    analyzedPlayers: number;
+    totalRelations: number;
+}
+
+export interface CommunityRelations {
+    period: { start: string; end: string };
+    stats: SocialAppStats;
+    topSynergies: RelationNode[];
+    antiSynergies: RelationNode[];
+    highlights: {
+        squads: any[]; // Define properly if needed
+        flexOnly: any[];
+        friendship: any[];
+    };
+}
+
+export async function getCommunityRelations(period: 'WEEKLY' | 'MONTHLY' | 'GENERAL', queue: 'SOLO' | 'FLEX' | 'BOTH'): Promise<CommunityRelations> {
+    let url = `${API_URL}/community/relations?queue=${queue}`;
+
+    // Period Logic (Frontend Side or pass param?)
+    // The backend expects startDate/endDate.
+    // Let's keep the logic here to match other functions:
+    const now = new Date();
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+
+    if (period === 'WEEKLY') start.setDate(now.getDate() - 7);
+    else if (period === 'MONTHLY') start.setMonth(now.getMonth() - 1);
+    else if (period === 'GENERAL') start.setTime(0); // 1970
+
+    url += `&startDate=${start.toISOString()}&endDate=${now.toISOString()}`;
+
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('Failed to fetch relations');
     return res.json();
 }

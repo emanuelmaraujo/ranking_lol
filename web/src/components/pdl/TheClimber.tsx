@@ -53,7 +53,7 @@ export function TheClimber({ player }: TheClimberProps) {
                         <div className={`text-[10px] font-bold uppercase tracking-[0.2em] mb-1 ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
                             {isPositive ? 'Maior Escalada' : 'Maior Queda'}
                         </div>
-                        <Link href={`/player/${player.puuid}`} className="text-4xl md:text-5xl font-[family-name:var(--font-outfit)] font-black text-white hover:text-gray-200 transition-colors">
+                        <Link href={`/player/${player.puuid}`} className="text-2xl md:text-4xl font-[family-name:var(--font-outfit)] font-black text-white hover:text-gray-200 transition-colors truncate max-w-[250px] md:max-w-md">
                             {player.gameName}
                         </Link>
                         <div className="text-zinc-500 font-mono text-sm tracking-widest mt-0.5">#{player.tagLine}</div>

@@ -29,65 +29,107 @@ export default function PlayerProfile({ params }: { params: Promise<{ puuid: str
     const [history, setHistory] = useState<PlayerHistory | null>(null);
     const [insights, setInsights] = useState<PlayerInsights | null>(null);
 
-    // Loading States
+    // States
     const [initialLoading, setInitialLoading] = useState(true);
     const [isRefetching, setIsRefetching] = useState(false);
-
     const [selectedMatch, setSelectedMatch] = useState<MatchHistoryEntry | null>(null);
 
-    // Pagination & Sort State
+    // Pagination & Sort
     const [page, setPage] = useState(1);
     const [sort, setSort] = useState<'asc' | 'desc'>('desc');
-    const [chartFilter, setChartFilter] = useState<'ALL' | 'MONTHLY' | 'WEEKLY'>('ALL');
 
-    const getFilteredHistory = () => {
-        if (!history) return [];
+    // NEW: Global Time Filter
+    const [timeFilter, setTimeFilter] = useState<'DAY' | 'WEEK' | 'MONTH' | 'ALL'>('WEEK');
+
+    // Helper to get Dates
+    const getDateRange = () => {
         const now = new Date();
-        const cutoff = new Date();
+        const start = new Date();
 
-        if (chartFilter === 'WEEKLY') cutoff.setDate(now.getDate() - 7);
-        if (chartFilter === 'MONTHLY') cutoff.setDate(now.getDate() - 30);
-        if (chartFilter === 'ALL') return history.history;
+        // Brazil Time correction isn't strictly needed if we just use standard Date objects and let Backend handle exact comparison, 
+        // but for "Start of Day" it matters.
+        // Let's rely on simple JS Dates for now, as local browser time is usually close enough or valid for "Today".
+        // Ideally backend handles timezone, but we pass ISO strings.
 
-        return history.history.filter(h => new Date(h.date) >= cutoff);
+        if (timeFilter === 'DAY') {
+            start.setHours(0, 0, 0, 0); // Today 00:00
+        } else if (timeFilter === 'WEEK') {
+            // Monday of this week
+            const day = start.getDay();
+            const diff = start.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+            start.setDate(diff);
+            start.setHours(0, 0, 0, 0);
+        } else if (timeFilter === 'MONTH') {
+            start.setDate(1); // 1st of Month
+            start.setHours(0, 0, 0, 0);
+        } else {
+            return { start: undefined, end: undefined }; // ALL
+        }
+        return { start: start.toISOString(), end: now.toISOString() };
     };
 
-    // Initial Load
-    useEffect(() => {
-        const loadInitial = async () => {
-            setInitialLoading(true);
-            try {
-                const [hData, iData, eData] = await Promise.all([
-                    getPlayerHistory(puuid, queue),
-                    getPlayerInsights(puuid, queue, 1, 10, sort),
-                    getPdlEvolution(puuid, queue)
-                ]);
-                setHistory(hData);
-                setInsights(iData);
-                setEvolution(eData);
-            } catch (e) { console.error(e); }
-            finally { setInitialLoading(false); }
-        };
-        loadInitial();
-    }, [puuid, queue]); // Only on Queue or PUUID change (Full Reset)
+    // Filtered Chart Logic (Client Side for smooth transition or consistency)
+    const getFilteredHistory = () => {
+        if (!history) return [];
+        const { start } = getDateRange();
+        if (!start) return history.history; // ALL
+        const startDate = new Date(start);
+        return history.history.filter(h => new Date(h.date) >= startDate);
+    };
 
-    // Pagination/Sort Update (Background Fetch)
-    useEffect(() => {
-        if (initialLoading) return; // Don't conflict
-        const updateInsights = async () => {
-            setIsRefetching(true);
-            try {
-                const iData = await getPlayerInsights(puuid, queue, page, 10, sort);
-                setInsights(iData);
-            } catch (e) { console.error(e); }
-            finally { setIsRefetching(false); }
-        };
-        updateInsights();
-    }, [page, sort, puuid, queue, initialLoading]); // Added puuid, queue, initialLoading to dependencies
+    // Data Fetching
+    const fetchData = async (isInitial = false) => {
+        if (isInitial) setInitialLoading(true);
+        else setIsRefetching(true);
 
+        try {
+            const { start, end } = getDateRange();
+
+            // Parallel Fetch
+            const promises: any[] = [
+                getPlayerInsights(puuid, queue, page, 10, sort, start, end)
+            ];
+
+            // Only fetch static/heavy stuff on initial load or Queue Change
+            if (isInitial) {
+                promises.push(getPlayerHistory(puuid, queue));
+                promises.push(getPdlEvolution(puuid, queue));
+            }
+
+            const results = await Promise.all(promises);
+            setInsights(results[0]);
+
+            if (isInitial) {
+                setHistory(results[1]);
+                setEvolution(results[2]);
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            if (isInitial) setInitialLoading(false);
+            else setIsRefetching(false);
+        }
+    };
+
+    // Trigger Fetch on Dependencies
+    useEffect(() => {
+        fetchData(true);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [puuid, queue]); // Full Reset
+
+    // Partial Update (Filter/Page/Sort)
+    useEffect(() => {
+        if (!initialLoading) {
+            fetchData(false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [page, sort, timeFilter]);
+
+    // Reset Page on Filter Change
     useEffect(() => {
         setPage(1);
-    }, [queue, sort]);
+    }, [timeFilter, queue]);
+
 
     if (initialLoading) return <PlayerProfileSkeleton />;
     if (!history || !insights) {
@@ -101,21 +143,23 @@ export default function PlayerProfile({ params }: { params: Promise<{ puuid: str
         );
     }
 
-    // --- THEME ENGINE ---
     const theme = getTheme(history.player.tier);
-    // --------------------
+
+    // Dynamic Title for Weekly Report
+    const reportTitle =
+        timeFilter === 'DAY' ? 'Performance Diária' :
+            timeFilter === 'WEEK' ? 'Performance Semanal' :
+                timeFilter === 'MONTH' ? 'Performance Mensal' :
+                    'Performance Geral';
 
     return (
         <div className={`min-h-screen pb-20 relative overflow-hidden ${theme.colors.background} transition-colors duration-700`}>
 
             <BackgroundParticles theme={theme} />
-
-            {/* Dynamic Background Gradient (Refined) */}
             <div className={`absolute top-0 inset-x-0 h-[1000px] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] ${theme.gradients.hero} opacity-30 pointer-events-none blur-3xl`} />
 
             <div className={`max-w-7xl mx-auto px-4 sm:px-6 relative z-10 pt-8`}>
 
-                {/* 1. Header Principal */}
                 <PlayerHeader
                     displayName={history.player.displayName}
                     gameName={history.player.displayName.split('#')[0]}
@@ -130,7 +174,36 @@ export default function PlayerProfile({ params }: { params: Promise<{ puuid: str
                     history={insights.history}
                 />
 
-                {/* 2. Main Grid Layout */}
+                {/* GLOBAL FILTER BAR */}
+                <div className="flex justify-center mb-8">
+                    <div className="flex bg-black/40 p-1.5 rounded-full border border-white/5 backdrop-blur-md shadow-2xl gap-1">
+                        {(['DAY', 'WEEK', 'MONTH', 'ALL'] as const).map((f) => (
+                            <button
+                                key={f}
+                                onClick={() => setTimeFilter(f)}
+                                className={`px-6 py-2 rounded-full text-xs font-bold transition-all duration-300 relative overflow-hidden ${timeFilter === f ? 'text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+                            >
+                                {timeFilter === f && (
+                                    <motion.div
+                                        layoutId="time-filter-bg"
+                                        className={`absolute inset-0 ${theme.colors.accent} opacity-20`} // Just a subtle bg
+                                        style={{ backgroundColor: f === 'ALL' ? '#3f3f46' : undefined }} // specialized color if needed
+                                    />
+                                )}
+                                {timeFilter === f && (
+                                    <motion.div
+                                        layoutId="time-filter-border"
+                                        className={`absolute inset-0 border border-white/20 rounded-full`}
+                                    />
+                                )}
+                                <span className="relative z-10">
+                                    {f === 'DAY' ? 'DIA' : f === 'WEEK' ? 'SEMANA' : f === 'MONTH' ? 'MÊS' : 'GERAL'}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
                 <div className={`grid grid-cols-1 xl:grid-cols-12 ${theme.styles.layoutGap} mt-8`}>
                     {/* Left Column (Chart, History) - 8 cols */}
                     <div className={`xl:col-span-8 space-y-${theme.styles.layoutGap.replace('gap-', '')}`}>
@@ -151,19 +224,6 @@ export default function PlayerProfile({ params }: { params: Promise<{ puuid: str
                                         <h3 className={`text-lg font-[family-name:var(--font-outfit)] font-bold ${theme.colors.text}`}>Evolução de PDL</h3>
                                     </div>
                                 </div>
-                                {/* Filters */}
-                                <div className="flex bg-black/20 p-1 rounded-lg">
-                                    {(['ALL', 'MONTHLY', 'WEEKLY'] as const).map((f) => (
-                                        <button
-                                            key={f}
-                                            onClick={() => setChartFilter(f)}
-                                            className={`px-3 py-1 text-[10px] font-bold rounded transition-colors ${chartFilter === f ? 'bg-white/10 text-white' : 'text-zinc-500 hover:text-white'
-                                                }`}
-                                        >
-                                            {f === 'ALL' ? 'GERAL' : f === 'MONTHLY' ? 'MÊS' : 'SEMANA'}
-                                        </button>
-                                    ))}
-                                </div>
                             </div>
                             <div className="h-[300px] w-full">
                                 <PdlChart history={getFilteredHistory()} theme={theme} />
@@ -183,12 +243,11 @@ export default function PlayerProfile({ params }: { params: Promise<{ puuid: str
                                 </div>
                             </div>
 
-                            {/* Content with Opacity Transition */}
                             <div className={`transition-opacity duration-300 ${isRefetching ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
                                 <MatchHistoryGrid history={insights.history} theme={theme} onSelectMatch={setSelectedMatch} />
                             </div>
 
-                            {/* Modern Pagination Bar */}
+                            {/* Pagination */}
                             {insights.pagination && insights.pagination.totalPages > 1 && (
                                 <div className="flex justify-between items-center mt-6 bg-black/20 p-2 rounded-xl border border-white/5 backdrop-blur-sm">
                                     <button
@@ -216,25 +275,23 @@ export default function PlayerProfile({ params }: { params: Promise<{ puuid: str
 
                     </div>
 
-                    {/* Right Column (Stats, Weekly, Mastery) - 4 cols */}
+                    {/* Right Column */}
                     <div className={`xl:col-span-4 space-y-${theme.styles.layoutGap.replace('gap-', '')}`}>
 
-                        {/* A. Profile Stats (Moved Here) */}
                         <div className="space-y-2">
-                            <h4 className="text-xs font-[family-name:var(--font-outfit)] font-bold text-zinc-500 uppercase tracking-widest px-1">Performance Geral</h4>
-                            {/* Force 2 cols for sidebar look */}
+                            <h4 className="text-xs font-[family-name:var(--font-outfit)] font-bold text-zinc-500 uppercase tracking-widest px-1">{reportTitle}</h4>
                             <StatsGrid stats={insights.stats} theme={theme} className="!grid-cols-2 !lg:grid-cols-2 !mb-0" />
                         </div>
 
-                        {/* B. Weekly Report (Backend Driven) */}
+                        {/* Report (Dynamic Title) */}
                         {insights.weeklyReport && (
                             <WeeklyReportCard
                                 theme={theme}
                                 report={insights.weeklyReport}
+                                title={reportTitle}
                             />
                         )}
 
-                        {/* C. Playstyle Radar (New) */}
                         {insights.playstyle && (
                             <PlaystyleRadar
                                 playstyle={insights.playstyle}
@@ -242,15 +299,12 @@ export default function PlayerProfile({ params }: { params: Promise<{ puuid: str
                             />
                         )}
 
-                        {/* D. Mastery Card */}
                         <MasteryShowcase masteries={history.masteries} theme={theme} />
 
                     </div>
                 </div>
             </div>
 
-            {/* Side Panel Overlay */}
-            {/* Match Details Modal */}
             <MatchDetailsModal
                 match={selectedMatch}
                 puuid={puuid}
