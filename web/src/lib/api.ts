@@ -315,7 +315,7 @@ export interface InsightPlayer {
 }
 
 export interface UniqueFeat extends InsightPlayer {
-    type: 'PENTA' | 'QUADRA' | 'PERFECT' | 'COMEBACK' | 'STOMP' | 'WIN_STREAK' | 'SOLO_CARRY' | 'BUTCHER' | 'VISIONARY' | 'TANK_GOD' | 'MARATHON';
+    type: 'PENTA' | 'QUADRA' | 'PERFECT' | 'COMEBACK' | 'STOMP' | 'WIN_STREAK' | 'SOLO_CARRY' | 'BUTCHER' | 'VISIONARY' | 'TANK_GOD' | 'MARATHON' | 'ABSURD_WINRATE';
     date: Date; // Keep as Date or string depending on backend usage, let's use Date string usually
     skinId?: number;
     occurrences?: number;

@@ -62,14 +62,17 @@ export function BagresView({ period, queue }: { period: any, queue: any }) {
     const topLoser = losers.length > 0 ? losers[0] : null;
 
     // 2. HERO: A Carroça (Worst Champ)
-    const worstChamp = data.aCarroca;
+    const worstChamp = data.aCarroca && data.aCarroca.winrate < 50 ? data.aCarroca : null;
     const champSplash = worstChamp ? `${CHAMPION_SPLASH_BASE}/${normalizeChampionName(worstChamp.championName)}_0.jpg` : '';
 
     // 3. LOWEST SCORE
     const lowestScorePlayer = ranking.filter(r => r.gamesUsed > 0).sort((a, b) => a.avgScore - b.avgScore)[0] || null;
 
     // 4. WORST WINRATE
-    const worstWrPlayer = ranking.filter(r => r.gamesUsed >= 5).sort((a, b) => parseFloat(a.winRate) - parseFloat(b.winRate))[0];
+    // Filter out players who actually have a positive winrate (>= 50%)
+    const worstWrPlayer = ranking
+        .filter(r => r.gamesUsed >= 5 && parseFloat(r.winRate) < 50)
+        .sort((a, b) => parseFloat(a.winRate) - parseFloat(b.winRate))[0];
 
     // Helper for Bento Items
     const BentoItem = ({ children, className, delay = 0 }: any) => (

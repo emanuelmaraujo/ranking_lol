@@ -3,7 +3,7 @@
 import { CommunityRelations } from '@/lib/api';
 import { SynergyCard } from '../SynergyCard';
 import { SocialHighlightCard } from '../SocialHighlightCard';
-import { Swords, Ghost, ShieldCheck, HeartCrack, Flame, User } from 'lucide-react';
+import { Swords, Ghost, ShieldCheck, HeartCrack, Flame, User, Skull, Scale } from 'lucide-react';
 import { motion, Variants } from 'framer-motion';
 
 interface SocialSoloViewProps {
@@ -115,13 +115,14 @@ export function SocialSoloView({ data }: SocialSoloViewProps) {
                 {/* Tilt Garantido -> Inimigos do PDL */}
                 <motion.div variants={item} className="h-full" whileHover="hover" initial="rest" animate="rest">
                     <motion.div variants={hoverCard} className="h-full">
-                        <SocialHighlightCard
-                            title="Inimigos do PDL"
-                            subtitle="Aposentados & Perigosos"
-                            icon={HeartCrack}
-                            color="rose"
-                        >
-                            {tiltDuo ? (
+                        {/* Only show if synergy score is significantly negative or winrate is lower than average/individual */}
+                        {tiltDuo && tiltDuo.deltaWr < 0 ? (
+                            <SocialHighlightCard
+                                title="Inimigos do PDL"
+                                subtitle="Sinergia Negativa"
+                                icon={HeartCrack}
+                                color="rose"
+                            >
                                 <div className="mt-4 text-center">
                                     <div className="flex justify-center -space-x-3 mb-3">
                                         <img src={`https://ddragon.leagueoflegends.com/cdn/16.1.1/img/profileicon/${tiltDuo.players[0].profileIconId}.png`} className="w-14 h-14 rounded-full border-2 border-rose-500 bg-black grayscale opacity-80" />
@@ -129,19 +130,68 @@ export function SocialSoloView({ data }: SocialSoloViewProps) {
                                     </div>
                                     <div className="text-3xl font-black text-rose-500 leading-none tracking-tighter">{tiltDuo.winRate.toFixed(0)}% WR</div>
                                     <div className="text-xs text-rose-400/60 font-bold uppercase mt-1">
-                                        {tiltDuo.deltaWr.toFixed(1)}% pior juntos
+                                        {Math.abs(tiltDuo.deltaWr).toFixed(1)}% pior juntos
                                     </div>
                                     <div className="text-[10px] text-zinc-500 mt-2 italic px-4">
                                         "Melhor fingir que nem conhece"
                                     </div>
                                 </div>
-                            ) : (
+                            </SocialHighlightCard>
+                        ) : (
+                            <SocialHighlightCard title="Paz e Amor" subtitle="Sem Inimizades" icon={ShieldCheck} color="zinc">
                                 <div className="h-full flex flex-col items-center justify-center text-zinc-600">
                                     <ShieldCheck className="w-8 h-8 mb-2 opacity-20" />
                                     <span className="text-xs italic">Comunidade segura (por enquanto)</span>
                                 </div>
-                            )}
-                        </SocialHighlightCard>
+                            </SocialHighlightCard>
+                        )}
+                    </motion.div>
+                </motion.div>
+
+                {/* New Card: Irmãos de Feed or Carregador vs Mochila */}
+                {/* Logic: Find a duo with big KDA diff or both low KDA */}
+                {/* Since we don't have per-player KDA in relation node easily without iterating matches, we simulate with mockup logic or generic "Duo Toxic" card if available */}
+                <motion.div variants={item} className="h-full" whileHover="hover" initial="rest" animate="rest">
+                    <motion.div variants={hoverCard} className="h-full">
+                        {/* Placeholder logic for "Mochila" - usually finding a duo with low winrate but high games */}
+                        {data.antiSynergies.length > 1 ? (
+                            <SocialHighlightCard
+                                title="Irmãos de Feed"
+                                subtitle="Abraço de Afogado"
+                                icon={Skull}
+                                color="orange"
+                            >
+                                {(() => {
+                                    const feedBrothers = data.antiSynergies[1]; // Take the second worst
+                                    return (
+                                        <div className="mt-4 text-center">
+                                            <div className="flex justify-center -space-x-3 mb-3">
+                                                <img src={`https://ddragon.leagueoflegends.com/cdn/16.1.1/img/profileicon/${feedBrothers.players[0].profileIconId}.png`} className="w-12 h-12 rounded-full border-2 border-orange-500 bg-black" />
+                                                <img src={`https://ddragon.leagueoflegends.com/cdn/16.1.1/img/profileicon/${feedBrothers.players[1].profileIconId}.png`} className="w-12 h-12 rounded-full border-2 border-orange-500 bg-black" />
+                                            </div>
+                                            <div className="text-2xl font-black text-orange-400">{feedBrothers.winRate.toFixed(0)}% WR</div>
+                                            <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
+                                                {feedBrothers.games} Derrotas (quase)
+                                            </div>
+                                            <div className="text-[10px] text-zinc-500 mt-2 italic">
+                                                "Afundando de mãos dadas"
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                            </SocialHighlightCard>
+                        ) : (
+                            <SocialHighlightCard
+                                title="Carregador & Mochila"
+                                subtitle="Desequilíbrio Total"
+                                icon={Scale}
+                                color="blue"
+                            >
+                                <div className="h-full flex items-center justify-center text-zinc-600 italic text-xs">
+                                    Nenhum duo desequilibrado
+                                </div>
+                            </SocialHighlightCard>
+                        )}
                     </motion.div>
                 </motion.div>
 

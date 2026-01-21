@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Trophy, Skull, Swords, Zap, Medal, Star, Flame, Crown, Eye, Shield, Hourglass } from 'lucide-react';
+import { Trophy, Skull, Swords, Zap, Medal, Star, Flame, Crown, Eye, Shield, Hourglass, Target } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { getHallOfFame, HallOfFameData, UniqueFeat } from '@/lib/api';
 import { getDateRange } from '@/lib/date-utils';
@@ -323,6 +323,19 @@ function getFeatConfig(type: string) {
                 valueLabel: 'Duração',
                 valueColor: 'text-amber-300',
             };
+        case 'ABSURD_WINRATE':
+            return {
+                label: 'Winrate Absurdo',
+                icon: Target,
+                bgClass: 'bg-emerald-950',
+                borderClass: 'border-emerald-500/40 hover:border-emerald-400',
+                iconBg: 'bg-emerald-500/20 border-emerald-500/30',
+                iconColor: 'text-emerald-400',
+                gradientOverlay: 'from-black/80 via-emerald-950/80 to-black/90',
+                valueLabel: 'Taxa de Vitória',
+                valueColor: 'text-emerald-300',
+            };
+
         default:
             return {
                 label: 'Feito Raro',

@@ -72,7 +72,7 @@ export default function RankingPage() {
 
     // View Config
     const [viewMode, setViewMode] = useState<"TIER" | "GLOBAL" | "LANE">("GLOBAL");
-    const [period, setPeriod] = useState<"GENERAL" | "MONTHLY" | "WEEKLY" | "DAILY">("WEEKLY");
+    const [period, setPeriod] = useState<"GENERAL" | "MONTHLY" | "WEEKLY" | "DAILY">("GENERAL");
 
     // Filters
     const [activeTier, setActiveTier] = useState("ALL");

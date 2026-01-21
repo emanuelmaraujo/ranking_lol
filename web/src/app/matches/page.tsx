@@ -31,7 +31,7 @@ export default function GlobalMatchesPage() {
         lane: '',
         champion: '', // Added champion
     });
-    const [statsPeriod, setStatsPeriod] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('DAILY');
+    const [statsPeriod, setStatsPeriod] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('MONTHLY');
 
     // Theme (Default to Gold/Standard for global view)
     const theme = getTheme('GOLD');

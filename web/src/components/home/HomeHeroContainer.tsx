@@ -26,7 +26,7 @@ type PeriodType = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'GENERAL';
 export function HomeHeroContainer() {
     const { queueType } = useQueue();
     const [activeView, setActiveView] = useState<ViewType>('RANKING');
-    const [period, setPeriod] = useState<PeriodType>('WEEKLY');
+    const [period, setPeriod] = useState<PeriodType>('GENERAL');
     const [topPlayer, setTopPlayer] = useState<RankingEntry | null>(null);
 
     // Fetch Top 1 for the HeroSection (Ranking View)

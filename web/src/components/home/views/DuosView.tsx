@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { getCommunityRelations, CommunityRelations } from '@/lib/api';
 import { SocialSoloView } from '@/components/social/views/SocialSoloView';
 import { SocialFlexView } from '@/components/social/views/SocialFlexView';
-import { SocialBothView } from '@/components/social/views/SocialBothView';
+
 
 export function DuosView({ period, queue }: { period: any, queue: string }) {
     // We rely on the parent's `queue` prop (SOLO, FLEX, or BOTH).
@@ -16,7 +16,7 @@ export function DuosView({ period, queue }: { period: any, queue: string }) {
     const [data, setData] = useState<CommunityRelations | null>(null);
     const [loading, setLoading] = useState(true);
 
-    const activeMode = (queue === 'FLEX' ? 'FLEX' : (queue === 'BOTH' || queue === 'ALL') ? 'BOTH' : 'SOLO');
+    const activeMode = (queue === 'FLEX' ? 'FLEX' : 'SOLO');
 
     useEffect(() => {
         const fetchData = async () => {
@@ -52,7 +52,6 @@ export function DuosView({ period, queue }: { period: any, queue: string }) {
                     >
                         {activeMode === 'SOLO' && "Análise de Duos Competitivos & Toxicidade"}
                         {activeMode === 'FLEX' && "Análise de Squads & Aquele Flex de Lei"}
-                        {activeMode === 'BOTH' && "Comparativo: Solo vs Flex (Quem carrega?)"}
                     </motion.p>
                 </div>
 
@@ -94,7 +93,7 @@ export function DuosView({ period, queue }: { period: any, queue: string }) {
                         >
                             {activeMode === 'SOLO' && <SocialSoloView data={data} />}
                             {activeMode === 'FLEX' && <SocialFlexView data={data} />}
-                            {activeMode === 'BOTH' && <SocialBothView data={data} />}
+
                         </motion.div>
                     </AnimatePresence>
                 ) : (

@@ -1004,7 +1004,10 @@ export class RankingService {
             player: any,
             pentaCount: number,
             scores: number[],
-            games: number
+            games: number,
+            wins: number,
+            uniqueChamps: Set<string>,
+            uniqueWins: Set<string>
         }> = {};
 
         // 2. Single Game Records
@@ -1085,11 +1088,17 @@ export class RankingService {
             }
 
             if (!playerStats[s.playerId]) {
-                playerStats[s.playerId] = { player: s.player, pentaCount: 0, scores: [], games: 0 };
+                playerStats[s.playerId] = { player: s.player, pentaCount: 0, scores: [], games: 0, wins: 0, uniqueChamps: new Set(), uniqueWins: new Set() };
             }
             const pStats = playerStats[s.playerId];
             pStats.games++;
             pStats.scores.push(s.matchScore);
+            pStats.uniqueChamps.add(s.championName);
+
+            if (s.isVictory) {
+                pStats.wins++;
+                pStats.uniqueWins.add(s.championName);
+            }
             const pentas = Number(metrics?.pentaKills || 0);
             pStats.pentaCount += pentas;
 
@@ -1278,6 +1287,30 @@ export class RankingService {
             }
         }
 
+        // --- Post-Aggregated Feats ---
+        for (const pid in playerStats) {
+            const p = playerStats[pid];
+
+            // 1. Winrate Absurdo (70%+, Min 5 Games)
+            if (p.games >= 5) {
+                const wr = p.wins / p.games;
+                if (wr >= 0.70) {
+                    uniqueFeats.push({
+                        ...p.player,
+                        type: 'ABSURD_WINRATE',
+                        label: 'Winrate Absurdo',
+                        value: (wr * 100).toFixed(0) + '%',
+                        detail: `${p.wins}V ${p.games - p.wins}D`,
+                        matchId: 'feat-wr-' + pid,
+                        date: new Date(),
+                        championName: undefined
+                    });
+                }
+            }
+
+
+        }
+
         // Sort Unique Feats by date desc
         // DEDUPLICATION LOGIC
         // 1. Group by Key
@@ -1416,6 +1449,10 @@ export class RankingService {
                 champStats[s.championId].count++;
                 if (s.isVictory) champStats[s.championId].wins++;
             }
+
+            // --- New Feats: Winrate Absurdo & Rei da Variedade ---
+            // Need to track this per player globally (outside single game loop)
+            // But we have `playerStats` aggregation below. We will handle it there.
 
             // 1. Pacifista (Low Damage)
             if (s.lane !== 'UTILITY' && s.match.gameDuration > 900) {
