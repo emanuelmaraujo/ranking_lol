@@ -1,6 +1,7 @@
 import { MatchDTO, Participant, calculateMatchScore, LAYER_WEIGHTS, metricScore } from "../engine/scoring.engine";
 import { PrismaClient } from '@prisma/client';
 import { RiotService } from './riot.service';
+import { SEASON_CONFIG } from '../config/season';
 
 const prisma = new PrismaClient();
 
@@ -573,6 +574,30 @@ export class RankingService {
             pdlDelta = endVal - startVal;
         }
 
+        // Playstyle Logic
+        let vision = 0;
+        let farm = 0;
+        let survivability = 0;
+
+        if (scores.length > 0) {
+            // Vision (Using VSPM from history as proxy)
+            // Target: 2.0 VSPM = 100
+            const totalVspm = scores.reduce((acc, m) => acc + ((m.metrics as any)?.vspm || 0), 0);
+            const avgVspm = totalVspm / scores.length;
+            vision = Math.min(100, Math.round((avgVspm / 2.0) * 100));
+
+            // Farm (Using CSPM)
+            // Target: 10.0 CSPM = 100
+            const totalCspm = scores.reduce((acc, m) => acc + ((m.metrics as any)?.cspm || 0), 0);
+            const avgCspm = totalCspm / scores.length;
+            farm = Math.min(100, Math.round((avgCspm / 10.0) * 100));
+
+            // Survivability (Using Avg Deaths)
+            // Baseline: 0 deaths = 100, 8 deaths = 20.
+            const avgDeaths = aggregations._avg.deaths || 0;
+            survivability = Math.max(0, Math.round(100 - (avgDeaths * 10)));
+        }
+
         return {
             stats: {
                 avgScore: (aggregations._avg.matchScore || 0).toFixed(1),
@@ -602,9 +627,305 @@ export class RankingService {
                 pdlDelta
             },
             playstyle: {
-                combat: Math.round(aggregations._avg.performanceScore || 0),
-                objectives: Math.round(aggregations._avg.objectivesScore || 0),
-                discipline: Math.round(aggregations._avg.disciplineScore || 0)
+                combat: Math.min(100, Math.round(((aggregations._avg.performanceScore || 0) / 60) * 100)),
+                objectives: Math.min(100, Math.round(((aggregations._avg.objectivesScore || 0) / 30) * 100)),
+                vision,
+                farm,
+                survivability
+            }
+        };
+    }
+
+    private normalizeLane(lane: string): string {
+        const l = lane.toUpperCase();
+        if (l.includes('JUNGLE') || l === 'JUNGLE') return 'JUNGLE';
+        if (l.includes('MID') || l === 'MIDDLE') return 'MIDDLE';
+        if (l.includes('TOP')) return 'TOP';
+        if (l.includes('BOT') || l === 'BOTTOM') return 'BOTTOM';
+        if (l.includes('SUP') || l === 'UTILITY') return 'UTILITY';
+        return 'UNKNOWN';
+    }
+
+    /**
+     * Get Aggregated Player Stats (Detailed)
+     */
+    async getPlayerDetailedStats(puuid: string, queueType: 'SOLO' | 'FLEX' | 'BOTH', startDate?: Date, endDate?: Date) {
+        const dateFilter: any = {};
+        if (startDate || endDate) {
+            dateFilter.gameCreation = {};
+            if (startDate) dateFilter.gameCreation.gte = startDate;
+            if (endDate) dateFilter.gameCreation.lte = endDate;
+        }
+
+        const queueFilter = queueType === 'BOTH' ? {} : { queueType };
+
+        // Fetch Scores
+        // Using include to get Match context and teammates (scores of other players in same match)
+        const scores = await prisma.matchScore.findMany({
+            where: {
+                playerId: puuid,
+                ...queueFilter,
+                match: dateFilter
+            } as any,
+            include: {
+                match: {
+                    include: {
+                        scores: {
+                            include: { player: true } // For Teammates
+                        }
+                    }
+                }
+            }
+        });
+
+        const totalGames = scores.length;
+        if (totalGames === 0) return null;
+
+        // Aggregators
+        // Use Set to count unique champions across all games before filtering top 10
+        const uniqueChampions = new Set<string>();
+
+        // FETCH GLOBAL MATCHUPS (Separate from Period Filter)
+        const matchupScores = await prisma.matchScore.findMany({
+            where: {
+                playerId: puuid,
+                ...queueFilter,
+                match: {
+                    gameCreation: {
+                        gte: new Date(SEASON_CONFIG.START_DATE) // Always fetch from Season Start for Matchups
+                    }
+                }
+            } as any,
+            select: { opponentChampionName: true, isVictory: true }
+        });
+
+        const championStats: Record<string, any> = {};
+        const laneStats: Record<string, any> = {};
+        const teammateStats: Record<string, any> = {};
+        const queueStats: Record<string, any> = { SOLO: { games: 0, wins: 0 }, FLEX: { games: 0, wins: 0 } };
+
+        scores.forEach(s => {
+            const isWin = s.isVictory;
+            const q = s.queueType;
+            const cid = s.championName || 'Unknown';
+            uniqueChampions.add(cid);
+
+            // Queue Split
+            if (queueStats[q]) {
+                queueStats[q].games++;
+                if (isWin) queueStats[q].wins++;
+            }
+
+            // Champion
+            if (!championStats[cid]) championStats[cid] = {
+                name: cid, games: 0, wins: 0,
+                soloGames: 0, soloWins: 0, flexGames: 0, flexWins: 0,
+                curKills: 0, curDeaths: 0, curAssists: 0
+            };
+            championStats[cid].games++;
+            if (isWin) championStats[cid].wins++;
+            if (q === 'SOLO') {
+                championStats[cid].soloGames++;
+                if (isWin) championStats[cid].soloWins++;
+            } else if (q === 'FLEX') {
+                championStats[cid].flexGames++;
+                if (isWin) championStats[cid].flexWins++;
+            }
+            championStats[cid].curKills += s.kills;
+            championStats[cid].curDeaths += s.deaths;
+            championStats[cid].curAssists += s.assists;
+
+            // Lane
+            const rawLane = s.lane || 'UNKNOWN';
+            const lane = this.normalizeLane(rawLane);
+
+            if (!laneStats[lane]) laneStats[lane] = {
+                lane, games: 0, wins: 0,
+                soloGames: 0, soloWins: 0, flexGames: 0, flexWins: 0
+            };
+            laneStats[lane].games++;
+            if (isWin) laneStats[lane].wins++;
+            if (q === 'SOLO') {
+                laneStats[lane].soloGames++;
+                if (isWin) laneStats[lane].soloWins++;
+            } else if (q === 'FLEX') {
+                laneStats[lane].flexGames++;
+                if (isWin) laneStats[lane].flexWins++;
+            }
+
+            // Teammates (Tracked Players only)
+            // Filter match.scores where participant != me AND isVictory == myVictory (Same Team)
+            if (s.match && s.match.scores) {
+                s.match.scores.forEach(teammate => {
+                    if (teammate.playerId === puuid) return;
+                    if (teammate.isVictory !== isWin) return; // Opposite team
+
+                    const tpid = teammate.playerId;
+                    if (!teammateStats[tpid]) teammateStats[tpid] = {
+                        player: teammate.player,
+                        games: 0, wins: 0
+                    };
+                    teammateStats[tpid].games++;
+                    if (isWin) teammateStats[tpid].wins++;
+                });
+            }
+        });
+
+        // Format
+        const formatStats = (obj: any, minGames = 1) => Object.values(obj)
+            .filter((x: any) => x.games >= minGames)
+            .map((x: any) => ({
+                ...x,
+                winRate: ((x.wins / x.games) * 100).toFixed(1),
+                soloWr: x.soloGames > 0 ? ((x.soloWins / x.soloGames) * 100).toFixed(1) : "0.0",
+                flexWr: x.flexGames > 0 ? ((x.flexWins / x.flexGames) * 100).toFixed(1) : "0.0"
+            }));
+
+        const champions = formatStats(championStats).map((c: any) => ({
+            ...c,
+            kda: c.curDeaths === 0 ? (c.curKills + c.curAssists).toFixed(2) : ((c.curKills + c.curAssists) / c.curDeaths).toFixed(2)
+        })).sort((a: any, b: any) => b.games - a.games).slice(0, 10);
+
+        const lanes = formatStats(laneStats).sort((a: any, b: any) => b.games - a.games);
+
+        const teammates = formatStats(teammateStats).sort((a: any, b: any) => b.games - a.games).slice(0, 10);
+
+        // Calculate Playstyle Metrics (Avg for Period)
+        const totalPerformance = scores.reduce((acc, s) => acc + s.performanceScore, 0);
+        const totalObjectives = scores.reduce((acc, s) => acc + s.objectivesScore, 0);
+        const totalVspm = scores.reduce((acc, s) => acc + ((s.metrics as any)?.vspm || 0), 0);
+        const totalCspm = scores.reduce((acc, s) => acc + ((s.metrics as any)?.cspm || 0), 0);
+        const totalDeaths = scores.reduce((acc, s) => acc + s.deaths, 0);
+
+        const count = scores.length || 1;
+        const avgPerformance = totalPerformance / count;
+        const avgObjectives = totalObjectives / count;
+        const avgVspm = totalVspm / count;
+        const avgCspm = totalCspm / count;
+        const avgDeaths = totalDeaths / count;
+
+        // Activity Aggregation (UTC-3 for Brazil)
+        const activity = { hour: {} as any, day: {} as any };
+        for (let i = 0; i < 24; i++) activity.hour[i] = { games: 0, wins: 0 };
+        for (let i = 0; i < 7; i++) activity.day[i] = { games: 0, wins: 0 };
+
+        scores.forEach(s => {
+            if (s.match && s.match.gameCreation) {
+                const date = new Date(s.match.gameCreation);
+                // Brazil UTC-3 Adjustment
+                let h = date.getUTCHours() - 3;
+                if (h < 0) h += 24;
+                const d = date.getUTCDay();
+
+                if (activity.hour[h]) {
+                    activity.hour[h].games++;
+                    if (s.isVictory) activity.hour[h].wins++;
+                }
+                if (activity.day[d]) {
+                    activity.day[d].games++;
+                    if (s.isVictory) activity.day[d].wins++;
+                }
+            }
+        });
+
+        // Duration Analysis (<25, 25-30, 30-35, 35+)
+        const duration = {
+            short: { games: 0, wins: 0 },
+            medium: { games: 0, wins: 0 },
+            long: { games: 0, wins: 0 },
+            extra: { games: 0, wins: 0 }
+        };
+
+        scores.forEach(s => {
+            if (s.match && s.match.gameDuration) {
+                const min = s.match.gameDuration / 60;
+                if (min < 25) {
+                    duration.short.games++;
+                    if (s.isVictory) duration.short.wins++;
+                } else if (min < 30) {
+                    duration.medium.games++;
+                    if (s.isVictory) duration.medium.wins++;
+                } else if (min < 35) {
+                    duration.long.games++;
+                    if (s.isVictory) duration.long.wins++;
+                } else {
+                    duration.extra.games++;
+                    if (s.isVictory) duration.extra.wins++;
+                }
+            }
+        });
+
+        // Matchup Analysis (Using ALL TIME / SEASON data)
+        const matchupsObj: Record<string, { games: number, wins: number, name: string }> = {};
+        matchupScores.forEach(s => {
+            const oppName = s.opponentChampionName;
+            // Only count if opponent is known and valid
+            if (oppName && oppName !== 'Unknown') {
+                if (!matchupsObj[oppName]) matchupsObj[oppName] = { games: 0, wins: 0, name: oppName };
+                matchupsObj[oppName].games++;
+                if (s.isVictory) matchupsObj[oppName].wins++;
+            }
+        });
+
+        const allMatchups = Object.values(matchupsObj)
+            .map(m => ({ ...m, winRate: Math.round((m.wins / m.games) * 100) }));
+
+        // Filter min 2 games to reduce noise
+        const meaningfulMatchups = allMatchups.filter(m => m.games >= (matchupScores.length < 20 ? 1 : 2));
+
+        // STRICT SEPARATION: Best (>50%) vs Worst (<=50%)
+        const bestMatchups = meaningfulMatchups
+            .filter(m => m.winRate > 50)
+            .sort((a, b) => b.winRate - a.winRate || b.games - a.games)
+            .slice(0, 3);
+
+        const worstMatchups = meaningfulMatchups
+            .filter(m => m.winRate <= 50)
+            .sort((a, b) => a.winRate - b.winRate || b.games - a.games)
+            .slice(0, 3);
+
+        // Trophy Room (Multikills & Feats)
+        const trophies = {
+            penta: 0,
+            quadra: 0,
+            triple: 0,
+            epicSteals: 0
+        };
+
+        scores.forEach(s => {
+            const m = s.metrics as any;
+            if (m) {
+                trophies.penta += m.pentaKills || 0;
+                trophies.quadra += m.quadraKills || 0;
+                trophies.triple += m.tripleKills || 0;
+                trophies.epicSteals += m.objectivesStolen || 0;
+            }
+        });
+
+        const playstyle = {
+            combat: Math.min(100, Math.round((avgPerformance / 60) * 100)),
+            objectives: Math.min(100, Math.round((avgObjectives / 30) * 100)),
+            vision: Math.min(100, Math.round((avgVspm / 2.0) * 100)),
+            farm: Math.min(100, Math.round((avgCspm / 10.0) * 100)),
+            survivability: Math.max(0, Math.round(100 - (avgDeaths * 10)))
+        };
+
+        return {
+            totalGames: scores.length,
+            totalChampions: uniqueChampions.size,
+            wins: scores.filter(s => s.isVictory).length,
+            winRate: ((scores.filter(s => s.isVictory).length / totalGames) * 100).toFixed(1),
+            playstyle,
+            activity,
+            duration,
+            matchups: { best: bestMatchups, worst: worstMatchups },
+            trophies,
+            champions,
+            lanes,
+            teammates,
+            comparison: {
+                solo: { ...queueStats.SOLO, winRate: queueStats.SOLO.games > 0 ? ((queueStats.SOLO.wins / queueStats.SOLO.games) * 100).toFixed(1) : "0.0" },
+                flex: { ...queueStats.FLEX, winRate: queueStats.FLEX.games > 0 ? ((queueStats.FLEX.wins / queueStats.FLEX.games) * 100).toFixed(1) : "0.0" }
             }
         };
     }

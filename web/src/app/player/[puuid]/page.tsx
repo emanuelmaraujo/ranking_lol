@@ -2,7 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
-import { getPlayerHistory, getPlayerInsights, getPdlEvolution, PlayerHistory, PlayerInsights, MatchHistoryEntry, PdlEvolution } from "@/lib/api";
+import { getPlayerHistory, getPlayerInsights, getPdlEvolution, getPlayerDetailedInsights, PlayerHistory, PlayerInsights, MatchHistoryEntry, PdlEvolution, DetailedStats } from "@/lib/api";
 import { PdlChart } from "@/components/PdlChart";
 import { MatchHistoryGrid } from "@/components/MatchHistoryGrid";
 import { MatchDetailsModal } from "@/components/MatchDetailsModal";
@@ -11,9 +11,9 @@ import { StatsGrid } from "@/components/StatsGrid";
 import { WeeklyReportCard } from "@/components/WeeklyReportCard";
 import { PlaystyleRadar } from "@/components/PlaystyleRadar";
 import { MasteryShowcase } from "@/components/MasteryShowcase";
-import { TrendingUp, Award } from "lucide-react";
-import { Card } from "@/components/ui/Card";
+import { TrendingUp, LayoutGrid, PieChart } from "lucide-react";
 import { useQueue } from "@/contexts/QueueContext";
+import { PlayerDetailedView } from "@/components/PlayerDetailedView";
 import { PlayerProfileSkeleton } from "@/components/PlayerProfileSkeleton";
 import { motion } from "framer-motion";
 import { BackgroundParticles } from "@/components/BackgroundParticles";
@@ -28,6 +28,11 @@ export default function PlayerProfile({ params }: { params: Promise<{ puuid: str
     const [evolution, setEvolution] = useState<PdlEvolution | null>(null);
     const [history, setHistory] = useState<PlayerHistory | null>(null);
     const [insights, setInsights] = useState<PlayerInsights | null>(null);
+    const [detailedStats, setDetailedStats] = useState<DetailedStats | null>(null);
+
+    // View Mode
+    const [viewMode, setViewMode] = useState<'OVERVIEW' | 'INSIGHTS'>('OVERVIEW');
+    const [compareMode, setCompareMode] = useState(false); // New: Dedicated Compare Mode
 
     // States
     const [initialLoading, setInitialLoading] = useState(true);
@@ -39,28 +44,22 @@ export default function PlayerProfile({ params }: { params: Promise<{ puuid: str
     const [sort, setSort] = useState<'asc' | 'desc'>('desc');
 
     // NEW: Global Time Filter
-    const [timeFilter, setTimeFilter] = useState<'DAY' | 'WEEK' | 'MONTH' | 'ALL'>('WEEK');
+    const [timeFilter, setTimeFilter] = useState<'DAY' | 'WEEK' | 'MONTH' | 'ALL'>('ALL');
 
     // Helper to get Dates
     const getDateRange = () => {
         const now = new Date();
         const start = new Date();
 
-        // Brazil Time correction isn't strictly needed if we just use standard Date objects and let Backend handle exact comparison, 
-        // but for "Start of Day" it matters.
-        // Let's rely on simple JS Dates for now, as local browser time is usually close enough or valid for "Today".
-        // Ideally backend handles timezone, but we pass ISO strings.
-
         if (timeFilter === 'DAY') {
             start.setHours(0, 0, 0, 0); // Today 00:00
         } else if (timeFilter === 'WEEK') {
-            // Monday of this week
             const day = start.getDay();
-            const diff = start.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+            const diff = start.getDate() - day + (day === 0 ? -6 : 1);
             start.setDate(diff);
             start.setHours(0, 0, 0, 0);
         } else if (timeFilter === 'MONTH') {
-            start.setDate(1); // 1st of Month
+            start.setDate(1);
             start.setHours(0, 0, 0, 0);
         } else {
             return { start: undefined, end: undefined }; // ALL
@@ -68,7 +67,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ puuid: str
         return { start: start.toISOString(), end: now.toISOString() };
     };
 
-    // Filtered Chart Logic (Client Side for smooth transition or consistency)
+    // Filtered Chart Logic
     const getFilteredHistory = () => {
         if (!history) return [];
         const { start } = getDateRange();
@@ -90,7 +89,6 @@ export default function PlayerProfile({ params }: { params: Promise<{ puuid: str
                 getPlayerInsights(puuid, queue, page, 10, sort, start, end)
             ];
 
-            // Only fetch static/heavy stuff on initial load or Queue Change
             if (isInitial) {
                 promises.push(getPlayerHistory(puuid, queue));
                 promises.push(getPdlEvolution(puuid, queue));
@@ -115,9 +113,9 @@ export default function PlayerProfile({ params }: { params: Promise<{ puuid: str
     useEffect(() => {
         fetchData(true);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [puuid, queue]); // Full Reset
+    }, [puuid, queue]);
 
-    // Partial Update (Filter/Page/Sort)
+    // Partial Update
     useEffect(() => {
         if (!initialLoading) {
             fetchData(false);
@@ -129,6 +127,15 @@ export default function PlayerProfile({ params }: { params: Promise<{ puuid: str
     useEffect(() => {
         setPage(1);
     }, [timeFilter, queue]);
+
+    // Fetch Detailed Stats when in Insights Mode
+    useEffect(() => {
+        if (viewMode === 'INSIGHTS') {
+            const { start, end } = getDateRange();
+            const q = compareMode ? 'BOTH' : queue as 'SOLO' | 'FLEX';
+            getPlayerDetailedInsights(puuid, q, start, end).then(setDetailedStats);
+        }
+    }, [viewMode, compareMode, queue, timeFilter, puuid]);
 
 
     if (initialLoading) return <PlayerProfileSkeleton />;
@@ -145,7 +152,6 @@ export default function PlayerProfile({ params }: { params: Promise<{ puuid: str
 
     const theme = getTheme(history.player.tier);
 
-    // Dynamic Title for Weekly Report
     const reportTitle =
         timeFilter === 'DAY' ? 'Performance Diária' :
             timeFilter === 'WEEK' ? 'Performance Semanal' :
@@ -186,8 +192,8 @@ export default function PlayerProfile({ params }: { params: Promise<{ puuid: str
                                 {timeFilter === f && (
                                     <motion.div
                                         layoutId="time-filter-bg"
-                                        className={`absolute inset-0 ${theme.colors.accent} opacity-20`} // Just a subtle bg
-                                        style={{ backgroundColor: f === 'ALL' ? '#3f3f46' : undefined }} // specialized color if needed
+                                        className={`absolute inset-0 ${theme.colors.accent} opacity-20`}
+                                        style={{ backgroundColor: f === 'ALL' ? '#3f3f46' : undefined }}
                                     />
                                 )}
                                 {timeFilter === f && (
@@ -204,105 +210,140 @@ export default function PlayerProfile({ params }: { params: Promise<{ puuid: str
                     </div>
                 </div>
 
-                <div className={`grid grid-cols-1 xl:grid-cols-12 ${theme.styles.layoutGap} mt-8`}>
-                    {/* Left Column (Chart, History) - 8 cols */}
-                    <div className={`xl:col-span-8 space-y-${theme.styles.layoutGap.replace('gap-', '')}`}>
-
-                        {/* A. Evolution Chart */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.1 }}
-                            className={`${theme.styles.borderRadius} p-6 ${theme.colors.cardBg} shadow-2xl relative overflow-hidden`}
+                {/* VIEW MODE TOGGLE */}
+                <div className="flex justify-center mb-6">
+                    <div className="bg-black/20 p-1 rounded-xl border border-white/5 flex gap-1">
+                        <button
+                            onClick={() => setViewMode('OVERVIEW')}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${viewMode === 'OVERVIEW' ? 'bg-white/10 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
                         >
-                            <div className="flex items-center justify-between mb-6">
-                                <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-lg bg-white/5`}>
-                                        <TrendingUp size={20} className={theme.colors.accent} />
-                                    </div>
-                                    <div>
-                                        <h3 className={`text-lg font-[family-name:var(--font-outfit)] font-bold ${theme.colors.text}`}>Evolução de PDL</h3>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="h-[300px] w-full">
-                                <PdlChart history={getFilteredHistory()} theme={theme} />
-                            </div>
-                        </motion.div>
-
-                        {/* B. Match History Grid */}
-                        <div className="relative">
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className={`text-lg font-[family-name:var(--font-outfit)] font-bold ${theme.colors.text} uppercase tracking-wider flex items-center gap-2`}>
-                                    Histórico
-                                    {isRefetching && <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded text-zinc-400 animate-pulse">Atualizando...</span>}
-                                </h3>
-                                <div className="flex gap-2">
-                                    <button onClick={() => setSort('desc')} className={`text-xs font-bold px-2 py-1 rounded transition-colors ${sort === 'desc' ? 'text-white bg-white/10' : 'text-zinc-500 hover:text-zinc-300'}`}>Recente</button>
-                                    <button onClick={() => setSort('asc')} className={`text-xs font-bold px-2 py-1 rounded transition-colors ${sort === 'asc' ? 'text-white bg-white/10' : 'text-zinc-500 hover:text-zinc-300'}`}>Antigo</button>
-                                </div>
-                            </div>
-
-                            <div className={`transition-opacity duration-300 ${isRefetching ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-                                <MatchHistoryGrid history={insights.history} theme={theme} onSelectMatch={setSelectedMatch} />
-                            </div>
-
-                            {/* Pagination */}
-                            {insights.pagination && insights.pagination.totalPages > 1 && (
-                                <div className="flex justify-between items-center mt-6 bg-black/20 p-2 rounded-xl border border-white/5 backdrop-blur-sm">
-                                    <button
-                                        onClick={() => setPage(p => Math.max(1, p - 1))}
-                                        disabled={page === 1 || isRefetching}
-                                        className="px-4 py-2 hover:bg-white/5 rounded-lg text-xs font-bold text-zinc-400 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent transition-all flex items-center gap-2"
-                                    >
-                                        <span>←</span> Anterior
-                                    </button>
-
-                                    <span className="text-xs font-mono font-bold text-zinc-600">
-                                        Página <span className="text-white">{page}</span> de {insights.pagination.totalPages}
-                                    </span>
-
-                                    <button
-                                        onClick={() => setPage(p => Math.min(insights.pagination!.totalPages, p + 1))}
-                                        disabled={page >= insights.pagination.totalPages || isRefetching}
-                                        className="px-4 py-2 hover:bg-white/5 rounded-lg text-xs font-bold text-zinc-400 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent transition-all flex items-center gap-2"
-                                    >
-                                        Próximo <span>→</span>
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-
-                    </div>
-
-                    {/* Right Column */}
-                    <div className={`xl:col-span-4 space-y-${theme.styles.layoutGap.replace('gap-', '')}`}>
-
-                        <div className="space-y-2">
-                            <h4 className="text-xs font-[family-name:var(--font-outfit)] font-bold text-zinc-500 uppercase tracking-widest px-1">{reportTitle}</h4>
-                            <StatsGrid stats={insights.stats} theme={theme} className="!grid-cols-2 !lg:grid-cols-2 !mb-0" />
-                        </div>
-
-                        {/* Report (Dynamic Title) */}
-                        {insights.weeklyReport && (
-                            <WeeklyReportCard
-                                theme={theme}
-                                report={insights.weeklyReport}
-                                title={reportTitle}
-                            />
-                        )}
-
-                        {insights.playstyle && (
-                            <PlaystyleRadar
-                                playstyle={insights.playstyle}
-                                theme={theme}
-                            />
-                        )}
-
-                        <MasteryShowcase masteries={history.masteries} theme={theme} />
-
+                            <LayoutGrid size={16} />
+                            Visão Geral
+                        </button>
+                        <button
+                            onClick={() => setViewMode('INSIGHTS')}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${viewMode === 'INSIGHTS' ? 'bg-white/10 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+                        >
+                            <PieChart size={16} />
+                            Insights
+                        </button>
                     </div>
                 </div>
+
+                {viewMode === 'INSIGHTS' ? (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        {detailedStats ? (
+                            <PlayerDetailedView
+                                stats={detailedStats}
+                                theme={theme}
+                                queue={compareMode ? 'BOTH' : queue}
+                                onToggleBoth={() => setCompareMode(!compareMode)}
+                            />
+                        ) : (
+                            <div className="h-96 flex items-center justify-center text-zinc-500">Carregando insights...</div>
+                        )}
+                    </div>
+                ) : (
+                    <div className={`grid grid-cols-1 xl:grid-cols-12 ${theme.styles.layoutGap} mt-8`}>
+                        {/* Left Column (Chart, History) - 8 cols */}
+                        <div className={`xl:col-span-8 space-y-${theme.styles.layoutGap.replace('gap-', '')}`}>
+
+                            {/* A. Evolution Chart */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.1 }}
+                                className={`${theme.styles.borderRadius} p-6 ${theme.colors.cardBg} shadow-2xl relative overflow-hidden`}
+                            >
+                                <div className="flex items-center justify-between mb-6">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`p-2 rounded-lg bg-white/5`}>
+                                            <TrendingUp size={20} className={theme.colors.accent} />
+                                        </div>
+                                        <div>
+                                            <h3 className={`text-lg font-[family-name:var(--font-outfit)] font-bold ${theme.colors.text}`}>Evolução de PDL</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="h-[300px] w-full">
+                                    <PdlChart history={getFilteredHistory()} theme={theme} />
+                                </div>
+                            </motion.div>
+
+                            {/* B. Match History Grid */}
+                            <div className="relative">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className={`text-lg font-[family-name:var(--font-outfit)] font-bold ${theme.colors.text} uppercase tracking-wider flex items-center gap-2`}>
+                                        Histórico
+                                        {isRefetching && <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded text-zinc-400 animate-pulse">Atualizando...</span>}
+                                    </h3>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setSort('desc')} className={`text-xs font-bold px-2 py-1 rounded transition-colors ${sort === 'desc' ? 'text-white bg-white/10' : 'text-zinc-500 hover:text-zinc-300'}`}>Recente</button>
+                                        <button onClick={() => setSort('asc')} className={`text-xs font-bold px-2 py-1 rounded transition-colors ${sort === 'asc' ? 'text-white bg-white/10' : 'text-zinc-500 hover:text-zinc-300'}`}>Antigo</button>
+                                    </div>
+                                </div>
+
+                                <div className={`transition-opacity duration-300 ${isRefetching ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+                                    <MatchHistoryGrid history={insights.history} theme={theme} onSelectMatch={setSelectedMatch} />
+                                </div>
+
+                                {/* Pagination */}
+                                {insights.pagination && insights.pagination.totalPages > 1 && (
+                                    <div className="flex justify-between items-center mt-6 bg-black/20 p-2 rounded-xl border border-white/5 backdrop-blur-sm">
+                                        <button
+                                            onClick={() => setPage(p => Math.max(1, p - 1))}
+                                            disabled={page === 1 || isRefetching}
+                                            className="px-4 py-2 hover:bg-white/5 rounded-lg text-xs font-bold text-zinc-400 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent transition-all flex items-center gap-2"
+                                        >
+                                            <span>←</span> Anterior
+                                        </button>
+
+                                        <span className="text-xs font-mono font-bold text-zinc-600">
+                                            Página <span className="text-white">{page}</span> de {insights.pagination.totalPages}
+                                        </span>
+
+                                        <button
+                                            onClick={() => setPage(p => Math.min(insights.pagination!.totalPages, p + 1))}
+                                            disabled={page >= insights.pagination.totalPages || isRefetching}
+                                            className="px-4 py-2 hover:bg-white/5 rounded-lg text-xs font-bold text-zinc-400 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent transition-all flex items-center gap-2"
+                                        >
+                                            Próximo <span>→</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                        </div>
+
+                        {/* Right Column */}
+                        <div className={`xl:col-span-4 space-y-${theme.styles.layoutGap.replace('gap-', '')}`}>
+
+                            <div className="space-y-2">
+                                <h4 className="text-xs font-[family-name:var(--font-outfit)] font-bold text-zinc-500 uppercase tracking-widest px-1">{reportTitle}</h4>
+                                <StatsGrid stats={insights.stats} theme={theme} className="!grid-cols-2 !lg:grid-cols-2 !mb-0" />
+                            </div>
+
+                            {/* Report (Dynamic Title) */}
+                            {insights.weeklyReport && (
+                                <WeeklyReportCard
+                                    theme={theme}
+                                    report={insights.weeklyReport}
+                                    title={reportTitle}
+                                />
+                            )}
+
+                            {insights.playstyle && (
+                                <PlaystyleRadar
+                                    playstyle={insights.playstyle}
+                                    theme={theme}
+                                />
+                            )}
+
+                            <MasteryShowcase masteries={history.masteries} theme={theme} />
+
+                        </div>
+                    </div>
+                )}
             </div>
 
             <MatchDetailsModal

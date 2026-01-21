@@ -145,6 +145,29 @@ export async function rankingRoutes(fastify: FastifyInstance) {
             reply.status(500).send({ error: 'Internal Server Error' });
         }
     });
+
+    // 5.5 Player Detailed Insights (New)
+    interface DetailedInsightsQuery { queue?: string; startDate?: string; endDate?: string; }
+    fastify.get<{ Params: PlayerParams, Querystring: DetailedInsightsQuery }>('/api/player/:puuid/detailed-insights', async (request, reply) => {
+        const { puuid } = request.params;
+        const { queue, startDate, endDate } = request.query;
+
+        // Map Queue (Allow BOTH)
+        let q: 'SOLO' | 'FLEX' | 'BOTH' = 'SOLO';
+        if (queue === 'FLEX') q = 'FLEX';
+        if (queue === 'BOTH') q = 'BOTH';
+
+        try {
+            const start = startDate ? new Date(startDate) : undefined;
+            const end = endDate ? new Date(endDate) : undefined;
+            const data = await rankingService.getPlayerDetailedStats(puuid, q, start, end);
+            if (!data) return reply.status(404).send({ error: 'No data found' });
+            return data;
+        } catch (error) {
+            console.error(error);
+            reply.status(500).send({ error: 'Internal Server Error' });
+        }
+    });
     // 7. System Initialization
     fastify.get('/api/system/init-status', async (request, reply) => {
         try {

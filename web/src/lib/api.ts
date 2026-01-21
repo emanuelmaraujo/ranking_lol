@@ -236,6 +236,56 @@ export async function getPlayerInsights(puuid: string, queue: 'SOLO' | 'FLEX' = 
     return res.json();
 }
 
+export interface DetailedStats {
+    totalGames: number;
+    totalChampions: number;
+    wins: number;
+    winRate: string;
+    champions: { name: string; games: number; wins: number; winRate: string; kda: string; curKills: number; curDeaths: number; curAssists: number; soloWr?: string; flexWr?: string; soloGames?: number; flexGames?: number; }[];
+    lanes: { lane: string; games: number; wins: number; winRate: string; soloWr?: string; flexWr?: string; }[];
+    teammates: { player: { gameName: string; tagLine: string; profileIconId: number }; games: number; wins: number; winRate: string }[];
+    playstyle: {
+        combat: number;
+        objectives: number;
+        vision: number;
+        farm: number;
+        survivability: number;
+    };
+    activity: {
+        hour: Record<number, { games: number, wins: number }>;
+        day: Record<number, { games: number, wins: number }>;
+    };
+    duration: {
+        short: { games: number; wins: number };
+        medium: { games: number; wins: number };
+        long: { games: number; wins: number };
+        extra: { games: number; wins: number };
+    };
+    matchups: {
+        best: { name: string; games: number; wins: number; winRate: number }[];
+        worst: { name: string; games: number; wins: number; winRate: number }[];
+    };
+    trophies: {
+        penta: number;
+        quadra: number;
+        triple: number;
+        epicSteals: number;
+    };
+    comparison: {
+        solo: { games: number; wins: number; winRate: string };
+        flex: { games: number; wins: number; winRate: string };
+    };
+}
+
+export async function getPlayerDetailedInsights(puuid: string, queue: 'SOLO' | 'FLEX' | 'BOTH', startDate?: string, endDate?: string): Promise<DetailedStats | null> {
+    let url = `${API_URL}/player/${puuid}/detailed-insights?queue=${queue}`;
+    if (startDate) url += `&startDate=${startDate}`;
+    if (endDate) url += `&endDate=${endDate}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return res.json();
+}
+
 export const getHighlights = async (queue: 'SOLO' | 'FLEX' = 'SOLO', filters?: { start?: Date; end?: Date }): Promise<PeriodHighlights> => {
     let url = `${API_URL}/ranking/insights?queue=${queue}`;
     if (filters?.start) url += `&startDate=${filters.start.toISOString()}`;
