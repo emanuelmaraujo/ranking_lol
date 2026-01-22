@@ -170,6 +170,11 @@ export async function runIngestBatch() {
                         }
                         if (!validLanes.includes(lane)) lane = 'MIDDLE'; // Ultimate Fallback
 
+                        // Identify Opponent Champion
+                        const opponentPart = match.info.participants.find(p =>
+                            p.teamPosition === pData.teamPosition && p.teamId !== pData.teamId
+                        );
+
                         // Prepare Data
                         const scoreData = {
                             playerId: player.puuid,
@@ -177,6 +182,8 @@ export async function runIngestBatch() {
                             lane: lane,
                             championId: pData.championId,
                             championName: pData.championName,
+                            opponentChampionId: opponentPart?.championId || null,
+                            opponentChampionName: opponentPart?.championName || 'Unknown',
                             queueType: queueType, // Explicit Queue Type
                             isVictory: result.breakdown.isVictory,
                             matchScore: result.matchScore,
@@ -238,6 +245,8 @@ export async function runIngestBatch() {
                                 lane: lane,
                                 championId: pData.championId,
                                 championName: pData.championName,
+                                opponentChampionId: opponentPart?.championId || null,
+                                opponentChampionName: opponentPart?.championName || 'Unknown',
                                 isVictory: result.breakdown.isVictory,
                                 matchScore: result.matchScore,
                                 performanceScore: result.breakdown.performance,

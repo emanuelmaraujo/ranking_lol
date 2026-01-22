@@ -147,6 +147,11 @@ async function main() {
         }
         if (!validLanes.includes(lane)) lane = 'MIDDLE';
 
+        // Identify Opponent Champion
+        const opponentPart = match.info.participants.find(p =>
+            p.teamPosition === participant.teamPosition && p.teamId !== participant.teamId
+        );
+
         await prisma.matchScore.create({
             data: {
                 playerId: puuid,
@@ -156,6 +161,8 @@ async function main() {
                 lane: lane,
                 championId: participant.championId,
                 championName: participant.championName,
+                opponentChampionId: opponentPart?.championId || null,
+                opponentChampionName: opponentPart?.championName || 'Unknown',
 
                 // Stats
                 kills: participant.kills,
