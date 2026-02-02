@@ -3,10 +3,107 @@ import { runSyncPlayers } from '../cli/sync-players';
 import { runSyncRanks } from '../cli/sync-ranks';
 import { runIngestBatch, ingestPlayers } from '../cli/ingest-batch';
 import { runRankingSeason } from '../cli/ranking-season';
+import { randomUUID } from 'crypto';
 
 const prisma = new PrismaClient();
 
+export interface JobStatus {
+    id: string;
+    state: 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'ERROR';
+    progress: number;
+    total: number | null;
+    log: string[];
+    result?: any;
+    error?: string;
+    startedAt: Date;
+    updatedAt: Date;
+}
+
 export class SyncService {
+    private jobs: Map<string, JobStatus> = new Map();
+
+    constructor() {
+        // Cleanup old jobs interval (every 1 hour)
+        setInterval(() => this.cleanupJobs(), 3600000);
+    }
+
+    private cleanupJobs() {
+        const now = Date.now();
+        for (const [id, job] of this.jobs.entries()) {
+            if (now - job.updatedAt.getTime() > 3600000) { // 1 hour retention
+                this.jobs.delete(id);
+            }
+        }
+    }
+
+    getJob(id: string): JobStatus | undefined {
+        return this.jobs.get(id);
+    }
+
+    startManualJob(playerPuuids: string[], limit: number = 5, queue: 'SOLO' | 'FLEX' | 'BOTH' = 'BOTH'): string {
+        const id = randomUUID();
+        const job: JobStatus = {
+            id,
+            state: 'QUEUED',
+            progress: 0,
+            total: null,
+            log: [`Queued update for ${playerPuuids.length} players. Limit: ${limit}`],
+            startedAt: new Date(),
+            updatedAt: new Date()
+        };
+        this.jobs.set(id, job);
+
+        // Start async logic
+        this.processManualJob(job, playerPuuids, limit, queue).catch(err => {
+            console.error(`[Job ${id}] Unhandled Error:`, err);
+            job.state = 'ERROR';
+            job.error = err.message;
+            job.updatedAt = new Date();
+        });
+
+        return id;
+    }
+
+    private async processManualJob(job: JobStatus, playerPuuids: string[], limit: number, queue: 'SOLO' | 'FLEX' | 'BOTH') {
+        job.state = 'PROCESSING';
+        job.log.push('Starting processing...');
+        job.updatedAt = new Date();
+
+        try {
+            const players = await prisma.player.findMany({
+                where: { puuid: { in: playerPuuids } }
+            });
+
+            if (players.length === 0) {
+                job.state = 'ERROR';
+                job.error = 'No players found';
+                job.log.push('❌ No players found in database');
+                job.updatedAt = new Date();
+                return;
+            }
+
+            job.log.push(`Found ${players.length} players. Fetching matches...`);
+
+            // Ingest with callback
+            const summary = await ingestPlayers(players, limit, queue, undefined, (processed, total) => {
+                job.progress = processed;
+                // job.total = total; // We don't really know total easily unless we sum up all matches found first
+                job.updatedAt = new Date();
+            });
+
+            job.state = 'COMPLETED';
+            job.result = summary;
+            job.log.push(`✅ Complete! Processed: ${summary.playersProcessed}, Saved: ${summary.matchesSaved}`);
+            job.updatedAt = new Date();
+
+        } catch (error: any) {
+            job.state = 'ERROR';
+            job.error = error.message;
+            job.log.push(`❌ Error: ${error.message}`);
+            job.updatedAt = new Date();
+        }
+    }
+
     /**
      * Fast Sync: Only essential metadata (Icons, Level, Mastery, Ranks)
      * Awaited by the frontend for immediate "Premium" feel.
@@ -70,23 +167,16 @@ export class SyncService {
     }
 
     /**
-     * Manual Update: Targeted update for specific players
-     * Respects rate limits by pausing background scheduler (handled by caller/API)
+     * Manual Update (Legacy/Synchronous wrapper if needed)
      */
     async manualUpdate(playerPuuids: string[], limit: number = 5, queue: 'SOLO' | 'FLEX' | 'BOTH' = 'BOTH') {
-        console.log(`\n🔧 [SyncService] Starting Manual Update for ${playerPuuids.length} players...`);
-
         const players = await prisma.player.findMany({
             where: { puuid: { in: playerPuuids } }
         });
 
-        if (players.length === 0) {
-            return { success: false, message: 'No players found' };
-        }
+        if (players.length === 0) return { success: false, message: 'No players found' };
 
-        // Use shared ingestion logic
         const summary = await ingestPlayers(players, limit, queue);
-
         return { success: true, summary };
     }
 

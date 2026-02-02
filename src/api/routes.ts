@@ -258,7 +258,7 @@ export async function rankingRoutes(fastify: FastifyInstance) {
             const account = await riotService.getAccountByRiotId(gameName, tagLine);
 
             // 2. Create/Update Player
-            const player = await prisma.player.upsert({
+            let player = await prisma.player.upsert({
                 where: { puuid: account.puuid },
                 update: {
                     gameName: account.gameName,
@@ -275,8 +275,62 @@ export async function rankingRoutes(fastify: FastifyInstance) {
                 }
             });
 
-            console.log(`[API] Added player: ${player.gameName} #${player.tagLine}`);
-            return { message: 'Player added/activated', player };
+            console.log(`[API] Added player: ${player.gameName} #${player.tagLine}. Starting deep sync...`);
+
+            // 3. Immediate Sync of Metadata (Icon, Level)
+            try {
+                const summoner = await riotService.getSummonerByPuuid(player.puuid);
+                player = await prisma.player.update({
+                    where: { puuid: player.puuid },
+                    data: {
+                        profileIconId: summoner.profileIconId,
+                        summonerLevel: summoner.summonerLevel
+                    }
+                });
+                console.log('   -> Updated Summoner Info (Icon/Level)');
+            } catch (e: any) {
+                console.warn(`[API] Failed to sync summoner info: ${e.message}`);
+            }
+
+            // 4. Immediate Sync of Ranks (Elo)
+            try {
+                const leagues = await riotService.getLeagueEntriesByPuuid(player.puuid);
+                for (const entry of leagues) {
+                    const queueMap: any = { 'RANKED_SOLO_5x5': 'SOLO', 'RANKED_FLEX_SR': 'FLEX' };
+                    const qType = queueMap[entry.queueType];
+                    if (!qType) continue;
+
+                    await prisma.rankSnapshot.create({
+                        data: {
+                            playerId: player.puuid,
+                            queueType: qType,
+                            tier: entry.tier,
+                            rank: entry.rank,
+                            lp: entry.leaguePoints
+                        }
+                    });
+
+                    if (qType === 'SOLO') {
+                        player = await prisma.player.update({
+                            where: { puuid: player.puuid },
+                            data: { tier: entry.tier, rank: entry.rank }
+                        });
+                    }
+                    console.log(`   -> Rank Synced: ${qType} ${entry.tier} ${entry.rank}`);
+                }
+            } catch (e: any) {
+                console.warn(`[API] Failed to sync ranks: ${e.message}`);
+            }
+
+            // 5. Fetch Matches (Async but triggered - last 50 matches)
+            try {
+                console.log('   -> Triggering 50 matches sync (BOTH queues)...');
+                await syncService.manualUpdate([player.puuid], 50, 'BOTH');
+            } catch (e: any) {
+                console.error(`[API] Failed initial match sync: ${e.message}`);
+            }
+
+            return { message: 'Player added and fully synced', player };
 
         } catch (error: any) {
             console.error('[API] Add Player Error:', error);
@@ -287,7 +341,7 @@ export async function rankingRoutes(fastify: FastifyInstance) {
         }
     });
 
-    // 8.5 Manual Update (Admin) - Pauses Scheduler
+    // 8.5 Manual Update (Admin) - Async Job
     interface ManualUpdateBody { puuids: string[]; matchCount?: number; queue?: 'SOLO' | 'FLEX' | 'BOTH'; }
     fastify.post<{ Body: ManualUpdateBody }>('/api/admin/manual-update', async (request, reply) => {
         const adminPwd = process.env.ADMIN_PASSWORD;
@@ -304,37 +358,42 @@ export async function rankingRoutes(fastify: FastifyInstance) {
         }
 
         try {
-            console.log(`[API] Manual Update Triggered for ${puuids.length} players. Pausing Scheduler...`);
+            console.log(`[API] Triggering Async Manual Update for ${puuids.length} players...`);
 
-            // 1. Pause Scheduler
-            await prisma.systemState.upsert({
-                where: { key: 'PAUSE_INGEST' },
-                update: { value: 'true' },
-                create: { key: 'PAUSE_INGEST', value: 'true' }
+            // Start Async Job
+            const jobId = syncService.startManualJob(puuids, matchCount, queue);
+
+            // Return 202 Accepted with Job ID
+            return reply.status(202).send({
+                message: 'Update accepted',
+                jobId,
+                statusUrl: `/api/admin/jobs/${jobId}`
             });
-
-            // 2. Wait for current jobs to clear (Safe Buffer)
-            await new Promise(r => setTimeout(r, 5000));
-
-            // 3. Execution
-            let result;
-            try {
-                result = await syncService.manualUpdate(puuids, matchCount, queue);
-            } finally {
-                // 4. Resume Scheduler (ALWAYS)
-                console.log('[API] Manual Update Finished. Resuming Scheduler...');
-                await prisma.systemState.update({
-                    where: { key: 'PAUSE_INGEST' },
-                    data: { value: 'false' }
-                });
-            }
-
-            return result;
 
         } catch (error: any) {
             console.error('[API] Manual Update Error:', error);
             reply.status(500).send({ error: 'Internal Server Error', details: error.message });
         }
+    });
+
+    // 8.6 Job Status (Admin)
+    interface JobParams { id: string; }
+    fastify.get<{ Params: JobParams }>('/api/admin/jobs/:id', async (request, reply) => {
+        const adminPwd = process.env.ADMIN_PASSWORD;
+        const providedPwd = request.headers['x-admin-password'];
+
+        if (!adminPwd || providedPwd !== adminPwd) {
+            return reply.status(401).send({ error: 'Unauthorized' });
+        }
+
+        const { id } = request.params;
+        const job = syncService.getJob(id);
+
+        if (!job) {
+            return reply.status(404).send({ error: 'Job not found' });
+        }
+
+        return job;
     });
 
     // 9. Insights (Hall of Fame & Shame)

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { X, Check, AlertTriangle, Loader2, Play } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { X, Check, AlertTriangle, Loader2, Play, RefreshCw, Zap, Server } from "lucide-react";
 import { RankingEntry } from "@/lib/api";
 
 interface UpdateModalProps {
@@ -18,7 +18,24 @@ export function UpdateModal({ isOpen, onClose, availablePlayers }: UpdateModalPr
 
     // Status
     const [status, setStatus] = useState<'IDLE' | 'PROCESSING' | 'SUCCESS' | 'ERROR'>('IDLE');
+    const [progress, setProgress] = useState(0);
     const [log, setLog] = useState<string[]>([]);
+    const [intervalId, setIntervalId] = useState<NodeJS.Timeout | null>(null);
+    const logRef = useRef<HTMLDivElement>(null);
+
+    // Auto-scroll logs
+    useEffect(() => {
+        if (logRef.current) {
+            logRef.current.scrollTop = logRef.current.scrollHeight;
+        }
+    }, [log]);
+
+    // Cleanup interval on unmount
+    useEffect(() => {
+        return () => {
+            if (intervalId) clearInterval(intervalId);
+        };
+    }, [intervalId]);
 
     if (!isOpen) return null;
 
@@ -46,10 +63,11 @@ export function UpdateModal({ isOpen, onClose, availablePlayers }: UpdateModalPr
         }
 
         setStatus('PROCESSING');
-        setLog(['🚀 Iniciando atualização manual...', '⚠️ Scheduler será pausado durante a operação.']);
+        setProgress(0);
+        setLog(['🚀 Iniciando atualização manual (Async)...']);
 
         try {
-            const res = await fetch('http://localhost:3333/api/admin/manual-update', {
+            const res = await fetch('/api/admin/manual-update', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -68,157 +86,283 @@ export function UpdateModal({ isOpen, onClose, availablePlayers }: UpdateModalPr
                 throw new Error(data.error || 'Erro na requisição');
             }
 
-            setLog(prev => [
-                ...prev,
-                `✅ Sucesso!`,
-                `Processados: ${data.summary.playersProcessed}/${selectedPuuids.length}`,
-                `Partidas Salvas: ${data.summary.matchesSaved}`,
-                `Erros: ${data.summary.errors}`
-            ]);
-            setStatus('SUCCESS');
+            // If Async Job Started (Status 202)
+            if (res.status === 202 && data.jobId) {
+                setLog(prev => [...prev, `✅ Job iniciado: ${data.jobId}`, '🔄 Monitorando progresso...']);
+
+                // Polling Loop
+                const id = setInterval(async () => {
+                    try {
+                        const statusRes = await fetch(`/api/admin/jobs/${data.jobId}`, {
+                            headers: { 'x-admin-password': adminPassword }
+                        });
+
+                        if (!statusRes.ok) throw new Error('Erro ao buscar status');
+
+                        const job = await statusRes.json();
+
+                        // Update State
+                        if (job.log && job.log.length > 0) {
+                            setLog(job.log); // Sync full log
+                        }
+
+                        // Update Progress
+                        const total = job.total || (selectedPuuids.length * matchCount) || 100;
+                        const percent = Math.min(Math.round((job.progress / total) * 100), 99);
+                        setProgress(percent);
+
+                        if (job.state === 'COMPLETED') {
+                            setStatus('SUCCESS');
+                            setProgress(100);
+                            setLog(prev => [...prev, '✨ Concluído com sucesso!']);
+                            // Clear interval via state setter logic
+                            clearInterval(id);
+                        } else if (job.state === 'ERROR') {
+                            setStatus('ERROR');
+                            setLog(prev => [...prev, `❌ Falha no Job: ${job.error}`]);
+                            clearInterval(id);
+                        }
+
+                    } catch (pollErr) {
+                        console.error(pollErr);
+                    }
+                }, 1000);
+
+                setIntervalId(id);
+
+            } else {
+                // Synchronous fallback (legacy or fast path)
+                setLog(prev => [
+                    ...prev,
+                    `✅ Sucesso (Sync)!`,
+                    `Resumo: ${JSON.stringify(data.summary || data)}`
+                ]);
+                setStatus('SUCCESS');
+                setProgress(100);
+            }
 
         } catch (error: any) {
             console.error(error);
             setLog(prev => [...prev, `❌ Erro: ${error.message}`]);
             setStatus('ERROR');
+            setProgress(0);
         }
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-[#1a1c23] border border-white/10 rounded-2xl p-6 max-w-2xl w-full shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
+            {/* Modal Container */}
+            <div className="bg-[#12141a] border border-white/10 rounded-3xl p-0 max-w-2xl w-full shadow-2xl flex flex-col max-h-[90vh] relative overflow-hidden">
+
+                {/* Decoration */}
+                <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-500/5 blur-[100px] rounded-full pointer-events-none" />
 
                 {/* Header */}
-                <div className="flex justify-between items-center mb-6">
-                    <div>
-                        <h3 className="text-xl font-[family-name:var(--font-outfit)] font-bold text-white flex items-center gap-2">
-                            <Play className="w-5 h-5 text-indigo-400" /> Atualização Manual
-                        </h3>
-                        <p className="text-sm text-gray-400">Forçe a atualização de partidas recentes respeitando o Rate Limit.</p>
-                    </div>
-                    <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
-                        <X className="w-5 h-5 text-gray-400" />
-                    </button>
-                </div>
-
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto space-y-6 pr-2">
-
-                    {/* 1. Configuration Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Player Selection */}
-                        <div className="space-y-3">
-                            <div className="flex justify-between items-center">
-                                <label className="text-xs font-bold text-gray-500 uppercase">Jogadores ({selectedPuuids.length})</label>
-                                <button onClick={toggleAll} className="text-xs text-indigo-400 hover:text-indigo-300 font-bold">
-                                    {selectedPuuids.length === availablePlayers.length ? 'Desmarcar Todos' : 'Marcar Todos'}
-                                </button>
+                <div className="p-8 border-b border-white/5 relative z-10">
+                    <div className="flex justify-between items-start">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-emerald-500/10 rounded-2xl flex items-center justify-center border border-emerald-500/20">
+                                <RefreshCw className={`w-6 h-6 text-emerald-400 ${status === 'PROCESSING' ? 'animate-spin' : ''}`} />
                             </div>
-                            <div className="h-48 overflow-y-auto bg-black/40 border border-white/10 rounded-xl p-2 space-y-1">
-                                {availablePlayers.map(player => (
-                                    <div
-                                        key={player.puuid}
-                                        onClick={() => togglePlayer(player.puuid)}
-                                        className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${selectedPuuids.includes(player.puuid) ? 'bg-indigo-500/20 border border-indigo-500/30' : 'hover:bg-white/5 border border-transparent'}`}
-                                    >
-                                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${selectedPuuids.includes(player.puuid) ? 'bg-indigo-500 border-indigo-500' : 'border-gray-600'}`}>
-                                            {selectedPuuids.includes(player.puuid) && <Check className="w-3 h-3 text-white" />}
-                                        </div>
-                                        <span className="text-sm text-white truncate">{player.gameName}</span>
-                                        <span className="text-xs text-gray-500">#{player.tagLine}</span>
-                                    </div>
-                                ))}
+                            <div>
+                                <h3 className="text-2xl font-[family-name:var(--font-outfit)] font-bold text-white tracking-tight">Sincronização Manual</h3>
+                                <p className="text-sm text-gray-400 mt-1">Force a atualização de dados em tempo real.</p>
                             </div>
                         </div>
+                        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-xl transition-colors text-gray-500 hover:text-white">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+                </div>
 
-                        {/* Settings */}
+                {/* Helper: Progress Bar */}
+                {status === 'PROCESSING' && (
+                    <div className="w-full h-1 bg-white/5 relative overflow-hidden">
+                        <div
+                            className="absolute inset-y-0 left-0 bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-300 ease-out"
+                            style={{ width: `${progress}%` }}
+                        />
+                        {/* Stripe Animation */}
+                        <div className="absolute inset-0 w-full h-full bg-[linear-gradient(45deg,rgba(255,255,255,0.1)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.1)_50%,rgba(255,255,255,0.1)_75%,transparent_75%,transparent)] bg-[length:1rem_1rem] animate-[progress-stripes_1s_linear_infinite]" />
+                    </div>
+                )}
+
+                {/* Content Scrollable */}
+                <div className="flex-1 overflow-y-auto p-8 space-y-8 relative z-10 custom-scrollbar">
+
+                    {/* 1. Player Selection */}
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center px-1">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                                <UsersIcon /> Selecionar Jogadores ({selectedPuuids.length})
+                            </label>
+                            <button
+                                onClick={toggleAll}
+                                className="text-xs text-indigo-400 hover:text-indigo-300 font-bold uppercase tracking-wider hover:underline"
+                            >
+                                {selectedPuuids.length === availablePlayers.length ? 'Desmarcar Todos' : 'Marcar Todos'}
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {availablePlayers.map(player => {
+                                const isSelected = selectedPuuids.includes(player.puuid);
+                                return (
+                                    <button
+                                        key={player.puuid}
+                                        onClick={() => togglePlayer(player.puuid)}
+                                        className={`group relative flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left ${isSelected
+                                                ? 'bg-indigo-600/10 border-indigo-500/50 shadow-lg shadow-indigo-500/10'
+                                                : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10'
+                                            }`}
+                                    >
+                                        <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'border-gray-600 group-hover:border-gray-500'
+                                            }`}>
+                                            {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className={`text-sm font-bold truncate ${isSelected ? 'text-white' : 'text-gray-300'}`}>
+                                                {player.gameName}
+                                            </p>
+                                            <p className="text-[10px] text-gray-500 font-mono">#{player.tagLine}</p>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
+                    {/* 2. Configuration */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* Settings Column */}
                         <div className="space-y-6">
-                            {/* Match Count */}
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-500 uppercase">Limite de Partidas (1-300)</label>
-                                <div className="flex items-center gap-4">
-                                    <input
-                                        type="range" min="1" max="300"
-                                        value={matchCount} onChange={(e) => setMatchCount(Number(e.target.value))}
-                                        className="flex-1 accent-indigo-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                                    />
-                                    <span className="text-xl font-bold text-white min-w-[2ch]">{matchCount}</span>
-                                </div>
-                                <p className="text-[10px] text-gray-500">Mais partidas = Maior tempo de pausa no servidor.</p>
-                            </div>
-
-                            {/* Queue */}
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-500 uppercase">Fila</label>
-                                <div className="flex gap-2">
+                            <div className="space-y-3">
+                                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                                    <Server className="w-3 h-3" /> Fila
+                                </label>
+                                <div className="grid grid-cols-3 gap-2">
                                     {(['BOTH', 'SOLO', 'FLEX'] as const).map(q => (
                                         <button
                                             key={q}
                                             onClick={() => setQueue(q)}
-                                            className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${queue === q ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-black/20 border-white/10 text-gray-400 hover:bg-white/5'}`}
+                                            className={`py-2.5 rounded-xl text-xs font-bold border transition-all ${queue === q
+                                                    ? 'bg-white text-black border-white shadow-lg shadow-white/10'
+                                                    : 'bg-black/20 border-white/10 text-gray-400 hover:bg-white/5 hover:text-white'
+                                                }`}
                                         >
-                                            {q === 'BOTH' ? 'Ambas' : q}
+                                            {q === 'BOTH' ? 'AMBAS' : q}
                                         </button>
                                     ))}
                                 </div>
                             </div>
 
-                            {/* Password */}
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-500 uppercase">Senha de Admin</label>
+                            <div className="space-y-3">
+                                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                                    <Zap className="w-3 h-3" /> Profundidade
+                                </label>
+                                <div className="bg-black/20 border border-white/10 rounded-xl p-4">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <span className="text-sm text-gray-300">Últimas Partidas</span>
+                                        <span className="text-2xl font-[family-name:var(--font-outfit)] font-bold text-indigo-400">{matchCount}</span>
+                                    </div>
+                                    <input
+                                        type="range" min="1" max="200"
+                                        value={matchCount} onChange={(e) => setMatchCount(Number(e.target.value))}
+                                        className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:accent-indigo-400 focus:outline-none"
+                                    />
+                                    <div className="flex justify-between mt-2 text-[10px] text-gray-600 font-mono">
+                                        <span>Rápido (1)</span>
+                                        <span>Extremo (200)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Security Column */}
+                        <div className="space-y-6">
+                            <div className="space-y-3">
+                                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Credenciais</label>
                                 <input
                                     type="password"
                                     value={adminPassword}
                                     onChange={(e) => setAdminPassword(e.target.value)}
-                                    placeholder="••••••••"
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-indigo-500"
+                                    placeholder="Senha de Administrador"
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all placeholder:text-gray-700"
                                 />
+                            </div>
+
+                            <div className="bg-amber-500/5 border border-amber-500/10 p-4 rounded-xl flex gap-3">
+                                <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                                <div className="space-y-1">
+                                    <h4 className="text-xs font-bold text-amber-500 uppercase">Rate Limit Check</h4>
+                                    <p className="text-[11px] text-amber-200/60 leading-relaxed">
+                                        O atualizador automático entrará em pausa (5min timeout).
+                                        Evite rodar em muitos jogadores de uma vez.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Warning */}
-                    <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-xl flex gap-3">
-                        <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0" />
-                        <div className="space-y-1">
-                            <h4 className="text-xs font-bold text-yellow-500 uppercase">Atenção ao Rate Limit</h4>
-                            <p className="text-xs text-yellow-200/80 leading-relaxed">
-                                Esta ação irá <strong>pausar o atualizador automático</strong> para garantir estabilidade.
-                                O sistema voltará ao normal automaticamente após a conclusão.
-                                Evite execuções simultâneas.
-                            </p>
+                    {/* Console/Logs */}
+                    {(status !== 'IDLE' || log.length > 0) && (
+                        <div ref={logRef} className="bg-black/60 rounded-xl p-4 font-mono text-xs h-32 overflow-y-auto border border-white/10 space-y-1.5 shadow-inner scroll-smooth">
+                            {log.length === 0 && <span className="text-gray-700 italic">...</span>}
+                            {log.map((line, i) => (
+                                <div key={i} className={`pl-2 border-l-2 ${line.includes('Erro') || line.includes('❌') ? 'border-rose-500 text-rose-200' : 'border-indigo-500 text-indigo-100'}`}>
+                                    {line}
+                                </div>
+                            ))}
                         </div>
-                    </div>
-
-                    {/* Terminal/Log */}
-                    <div className="bg-black rounded-xl p-4 font-mono text-xs h-32 overflow-y-auto border border-white/10 space-y-1 shadow-inner">
-                        {log.length === 0 && <span className="text-gray-600 italic">Logs aparecerão aqui...</span>}
-                        {log.map((line, i) => (
-                            <div key={i} className="text-gray-300 border-l-2 border-indigo-500 pl-2">{line}</div>
-                        ))}
-                    </div>
+                    )}
 
                 </div>
 
                 {/* Footer */}
-                <div className="mt-6 pt-4 border-t border-white/10 flex justify-end gap-3">
+                <div className="p-6 border-t border-white/5 bg-[#12141a]/50 backdrop-blur-sm flex justify-end gap-3 z-20">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 text-sm font-bold text-gray-400 hover:text-white transition-colors"
+                        className="px-6 py-3 text-sm font-bold text-gray-400 hover:text-white transition-colors"
                         disabled={status === 'PROCESSING'}
                     >
-                        Fechar
+                        Cancelar
                     </button>
                     <button
                         onClick={handleUpdate}
                         disabled={status === 'PROCESSING' || selectedPuuids.length === 0}
-                        className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2 rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/20 flex items-center gap-2"
+                        className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2 hover:scale-105 active:scale-95"
                     >
-                        {status === 'PROCESSING' && <Loader2 className="w-4 h-4 animate-spin" />}
-                        {status === 'PROCESSING' ? 'Processando...' : 'Iniciar Atualização'}
+                        {status === 'PROCESSING' ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Processando ({(progress).toFixed(0)}%)
+                            </>
+                        ) : (
+                            <>
+                                <Play className="w-4 h-4 fill-current" />
+                                Iniciar Sincronização
+                            </>
+                        )}
                     </button>
                 </div>
             </div>
+
+            <style jsx>{`
+                @keyframes progress-stripes {
+                    from { background-position: 1rem 0; }
+                    to { background-position: 0 0; }
+                }
+            `}</style>
         </div>
     );
+}
+
+function UsersIcon() {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+    )
 }
