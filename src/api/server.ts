@@ -7,7 +7,7 @@ const server = fastify({ logger: true });
 // Register CORS
 server.register(cors, {
     origin: '*', // Allow all for dev
-    methods: ['GET']
+    methods: ['GET', 'POST', 'OPTIONS']
 });
 
 // Register Routes

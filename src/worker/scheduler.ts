@@ -102,6 +102,18 @@ async function startScheduler() {
         let success = false;
         try {
             if (!isJobRunning) {
+                // Check Pause State
+                const pauseState = await prisma.systemState.findUnique({ where: { key: 'PAUSE_INGEST' } });
+                if (pauseState?.value === 'true') {
+                    console.log('⚠️ [SCHEDULER] Skipping Update Cycle: Paused by manual update.');
+                    // We don't set isJobRunning = true so loop "fails" or just returns?
+                    // Actually success=true means reschedule.
+                    success = true;
+                    // We must ensure finally block runs to reschedule.
+                    // Returning here will trigger finally block? Yes.
+                    return;
+                }
+
                 isJobRunning = true;
                 console.log('🔄 [SCHEDULER] Starting Update Cycle...');
 

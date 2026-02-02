@@ -287,6 +287,56 @@ export async function rankingRoutes(fastify: FastifyInstance) {
         }
     });
 
+    // 8.5 Manual Update (Admin) - Pauses Scheduler
+    interface ManualUpdateBody { puuids: string[]; matchCount?: number; queue?: 'SOLO' | 'FLEX' | 'BOTH'; }
+    fastify.post<{ Body: ManualUpdateBody }>('/api/admin/manual-update', async (request, reply) => {
+        const adminPwd = process.env.ADMIN_PASSWORD;
+        const providedPwd = request.headers['x-admin-password'];
+
+        if (!adminPwd || providedPwd !== adminPwd) {
+            return reply.status(401).send({ error: 'Unauthorized' });
+        }
+
+        const { puuids, matchCount = 5, queue = 'BOTH' } = request.body;
+
+        if (!puuids || puuids.length === 0) {
+            return reply.status(400).send({ error: 'No players specified' });
+        }
+
+        try {
+            console.log(`[API] Manual Update Triggered for ${puuids.length} players. Pausing Scheduler...`);
+
+            // 1. Pause Scheduler
+            await prisma.systemState.upsert({
+                where: { key: 'PAUSE_INGEST' },
+                update: { value: 'true' },
+                create: { key: 'PAUSE_INGEST', value: 'true' }
+            });
+
+            // 2. Wait for current jobs to clear (Safe Buffer)
+            await new Promise(r => setTimeout(r, 5000));
+
+            // 3. Execution
+            let result;
+            try {
+                result = await syncService.manualUpdate(puuids, matchCount, queue);
+            } finally {
+                // 4. Resume Scheduler (ALWAYS)
+                console.log('[API] Manual Update Finished. Resuming Scheduler...');
+                await prisma.systemState.update({
+                    where: { key: 'PAUSE_INGEST' },
+                    data: { value: 'false' }
+                });
+            }
+
+            return result;
+
+        } catch (error: any) {
+            console.error('[API] Manual Update Error:', error);
+            reply.status(500).send({ error: 'Internal Server Error', details: error.message });
+        }
+    });
+
     // 9. Insights (Hall of Fame & Shame)
     interface InsightsQueryShort { queue?: string; startDate?: string; endDate?: string; }
 

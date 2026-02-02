@@ -92,11 +92,28 @@ export class RiotService {
    * Region Routing: Uses 'americas' for Match-V5 (cluster) and specific platform (e.g. 'br1') for Account-V1
    */
     async getRecentMatchIds(puuid: string, queueId?: number, count: number = 20): Promise<string[]> {
-        let url = `${this.regionUrl}/lol/match/v5/matches/by-puuid/${puuid}/ids?start=0&count=${count}`;
-        if (queueId) {
-            url += `&queue=${queueId}`;
+        const MAX_PER_REQ = 100;
+        let allIds: string[] = [];
+        let fetched = 0;
+
+        while (fetched < count) {
+            const currentBatchSize = Math.min(count - fetched, MAX_PER_REQ);
+            let url = `${this.regionUrl}/lol/match/v5/matches/by-puuid/${puuid}/ids?start=${fetched}&count=${currentBatchSize}`;
+            if (queueId) {
+                url += `&queue=${queueId}`;
+            }
+
+            const ids = await this.executeRequest<string[]>(url);
+            if (ids.length === 0) break;
+
+            allIds = allIds.concat(ids);
+            fetched += ids.length;
+
+            // If we got less than requested, we reached the end
+            if (ids.length < currentBatchSize) break;
         }
-        return this.executeRequest<string[]>(url);
+
+        return allIds;
     }
 
     /**

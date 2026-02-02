@@ -7,7 +7,8 @@ import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { ChampionIcon } from "@/components/ui/ChampionIcon";
 import { EloBadge } from "@/components/EloBadge";
 import Link from "next/link";
-import { Search, UserPlus } from "lucide-react";
+import { Search, UserPlus, RefreshCw } from "lucide-react";
+import { UpdateModal } from "@/components/UpdateModal";
 
 import { Suspense } from "react";
 import { useRouter } from "next/navigation";
@@ -23,6 +24,7 @@ function PlayersContent() {
 
     // Add Summoner State
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showUpdateModal, setShowUpdateModal] = useState(false);
     const [newPlayer, setNewPlayer] = useState({ gameName: '', tagLine: '', password: '' });
     const [addStatus, setAddStatus] = useState<'IDLE' | 'LOADING' | 'SUCCESS' | 'ERROR'>('IDLE');
     const [errorMsg, setErrorMsg] = useState('');
@@ -88,6 +90,14 @@ function PlayersContent() {
                     >
                         <UserPlus className="w-4 h-4" />
                         Adicionar Invocador
+                    </button>
+
+                    <button
+                        onClick={() => setShowUpdateModal(true)}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl font-[family-name:var(--font-outfit)] font-bold transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2 justify-center"
+                    >
+                        <RefreshCw className="w-4 h-4" />
+                        Atualizar
                     </button>
 
                     <div className="relative w-full md:w-64">
@@ -170,6 +180,13 @@ function PlayersContent() {
                     </div>
                 </div>
             )}
+
+            {/* Modal Update Player */}
+            <UpdateModal
+                isOpen={showUpdateModal}
+                onClose={() => setShowUpdateModal(false)}
+                availablePlayers={players}
+            />
 
             {/* Grid de Jogadores */}
             {loading ? (

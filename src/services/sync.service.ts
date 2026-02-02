@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { runSyncPlayers } from '../cli/sync-players';
 import { runSyncRanks } from '../cli/sync-ranks';
-import { runIngestBatch } from '../cli/ingest-batch';
+import { runIngestBatch, ingestPlayers } from '../cli/ingest-batch';
 import { runRankingSeason } from '../cli/ranking-season';
 
 const prisma = new PrismaClient();
@@ -67,6 +67,27 @@ export class SyncService {
             console.error('❌ [SyncService] Ingest Failed:', error);
             throw error;
         }
+    }
+
+    /**
+     * Manual Update: Targeted update for specific players
+     * Respects rate limits by pausing background scheduler (handled by caller/API)
+     */
+    async manualUpdate(playerPuuids: string[], limit: number = 5, queue: 'SOLO' | 'FLEX' | 'BOTH' = 'BOTH') {
+        console.log(`\n🔧 [SyncService] Starting Manual Update for ${playerPuuids.length} players...`);
+
+        const players = await prisma.player.findMany({
+            where: { puuid: { in: playerPuuids } }
+        });
+
+        if (players.length === 0) {
+            return { success: false, message: 'No players found' };
+        }
+
+        // Use shared ingestion logic
+        const summary = await ingestPlayers(players, limit, queue);
+
+        return { success: true, summary };
     }
 
     /**
