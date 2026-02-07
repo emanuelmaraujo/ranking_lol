@@ -1,3 +1,5 @@
+import { getDateRange } from './date-utils';
+
 // Detect environment
 const isServer = typeof window === 'undefined';
 // Server Side: Use Internal Docker URL or Localhost
@@ -487,15 +489,10 @@ export async function getCommunityFeats(period: 'DAILY' | 'WEEKLY' | 'MONTHLY' |
     let url = `${API_URL}/insights/fame?queue=${queue}`;
 
     if (period !== 'GENERAL') {
-        const now = new Date();
-        const start = new Date();
-        start.setHours(0, 0, 0, 0); // Start of day logic usually better, but let's stick to simple
-
-        if (period === 'DAILY') start.setDate(now.getDate() - 1); // Last 24h or Today? Usually implies "This Day" or "Last 24h".
-        else if (period === 'WEEKLY') start.setDate(now.getDate() - 7);
-        else if (period === 'MONTHLY') start.setMonth(now.getMonth() - 1);
-
-        url += `&startDate=${start.toISOString()}&endDate=${now.toISOString()}`;
+        const range = getDateRange(period);
+        if (range?.start && range?.end) {
+            url += `&startDate=${range.start.toISOString()}&endDate=${range.end.toISOString()}`;
+        }
     }
 
     const res = await fetch(url, { cache: 'no-store' });
@@ -540,17 +537,13 @@ export async function getCommunityRelations(period: 'WEEKLY' | 'MONTHLY' | 'GENE
     let url = `${API_URL}/community/relations?queue=${queue}`;
 
     // Period Logic (Frontend Side or pass param?)
-    // The backend expects startDate/endDate.
-    // Let's keep the logic here to match other functions:
-    const now = new Date();
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-
-    if (period === 'WEEKLY') start.setDate(now.getDate() - 7);
-    else if (period === 'MONTHLY') start.setMonth(now.getMonth() - 1);
-    else if (period === 'GENERAL') start.setTime(0); // 1970
-
-    url += `&startDate=${start.toISOString()}&endDate=${now.toISOString()}`;
+    // Using shared logic from date-utils to ensure consistently (Mon-Sun weeks, Brazil Time)
+    if (period !== 'GENERAL') {
+        const range = getDateRange(period);
+        if (range?.start && range?.end) {
+            url += `&startDate=${range.start.toISOString()}&endDate=${range.end.toISOString()}`;
+        }
+    }
 
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error('Failed to fetch relations');
