@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Outfit, Inter } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/layout/AppShell";
+import { AppPreloader } from "@/components/layout/AppPreloader";
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -16,8 +17,6 @@ const inter = Inter({
 });
 
 import { Suspense } from "react";
-
-// ... existing imports
 
 import { QueueProvider } from "@/contexts/QueueContext";
 
@@ -39,9 +38,12 @@ export default function RootLayout({
       <body
         className={`${outfit.variable} ${inter.variable} antialiased bg-[#050505] text-white font-sans selection:bg-emerald-500/30 selection:text-emerald-200`}
       >
+        <AppPreloader />
+
+        {/* Main App Content */}
         <QueueProvider>
           <AppShell>
-            <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div></div>}>
+            <Suspense fallback={null}>
               {children}
             </Suspense>
           </AppShell>
