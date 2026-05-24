@@ -1,11 +1,9 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/db';
 import { runSyncPlayers } from '../cli/sync-players';
 import { runSyncRanks } from '../cli/sync-ranks';
 import { runIngestBatch, ingestPlayers } from '../cli/ingest-batch';
 import { runRankingSeason } from '../cli/ranking-season';
 import { randomUUID } from 'crypto';
-
-const prisma = new PrismaClient();
 
 export interface JobStatus {
     id: string;

@@ -2,10 +2,26 @@ import { getDateRange } from './date-utils';
 
 // Detect environment
 const isServer = typeof window === 'undefined';
-// Server Side: Use Internal Docker URL or Localhost
-const INTERNAL_API = process.env.API_INTERNAL_URL || 'http://127.0.0.1:3333';
-// Client Side: Use relative path (Rewrites)
-const API_URL = isServer ? `${INTERNAL_API}/api` : '/api';
+
+const getApiUrl = () => {
+    if (!isServer) return '/api';
+    
+    // Server-side (Server Components / SSR)
+    if (process.env.NEXT_PUBLIC_API_URL) {
+        const url = process.env.NEXT_PUBLIC_API_URL;
+        return url.endsWith('/api') ? url : `${url}/api`;
+    }
+    
+    if (process.env.NEXT_PUBLIC_VERCEL_URL) {
+        return `https://${process.env.NEXT_PUBLIC_VERCEL_URL}/api`;
+    }
+    
+    // Local dev Server Component fallback
+    const internalApi = process.env.API_INTERNAL_URL || 'http://127.0.0.1:3000';
+    return internalApi.endsWith('/api') ? internalApi : `${internalApi}/api`;
+};
+
+const API_URL = getApiUrl();
 
 console.log(`[API Config] isServer=${isServer}, API_URL=${API_URL}`);
 

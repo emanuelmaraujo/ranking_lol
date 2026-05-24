@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/update",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/snapshot",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/sync-players",
+      "schedule": "0 7 * * *"
+    }
+  ]
+}

@@ -1,9 +1,7 @@
 import { MatchDTO, Participant, calculateMatchScore, LAYER_WEIGHTS, metricScore } from "../engine/scoring.engine";
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/db';
 import { RiotService } from './riot.service';
 import { SEASON_CONFIG } from '../config/season';
-
-const prisma = new PrismaClient();
 
 export interface RankingEntry {
     rank: number;
