@@ -1258,7 +1258,7 @@ export class RankingService {
                 const account = await this.riotService.getAccountByRiotId(input.gameName, input.tagLine);
 
                 // 2. Create/Update Player
-                await prisma.player.upsert({
+                let player = await prisma.player.upsert({
                     where: { puuid: account.puuid },
                     update: {
                         gameName: account.gameName,
@@ -1274,6 +1274,49 @@ export class RankingService {
                         isActive: true
                     }
                 });
+
+                // 3. Lightweight Sync Summoner Info (Icon & Level)
+                try {
+                    const summoner = await this.riotService.getSummonerByPuuid(player.puuid);
+                    player = await prisma.player.update({
+                        where: { puuid: player.puuid },
+                        data: {
+                            profileIconId: summoner.profileIconId,
+                            summonerLevel: summoner.summonerLevel
+                        }
+                    });
+                } catch (e: any) {
+                    console.warn(`[RankingService] Failed to sync summoner info for ${account.gameName}: ${e.message}`);
+                }
+
+                // 4. Lightweight Sync Ranks (Tier & LP)
+                try {
+                    const leagues = await this.riotService.getLeagueEntriesByPuuid(player.puuid);
+                    for (const entry of leagues) {
+                        const queueMap: any = { RANKED_SOLO_5x5: 'SOLO', RANKED_FLEX_SR: 'FLEX' };
+                        const qType = queueMap[entry.queueType];
+                        if (!qType) continue;
+
+                        await prisma.rankSnapshot.create({
+                            data: {
+                                playerId: player.puuid,
+                                queueType: qType,
+                                tier: entry.tier,
+                                rank: entry.rank,
+                                lp: entry.leaguePoints
+                            }
+                        });
+
+                        if (qType === 'SOLO') {
+                            player = await prisma.player.update({
+                                where: { puuid: player.puuid },
+                                data: { tier: entry.tier, rank: entry.rank }
+                            });
+                        }
+                    }
+                } catch (e: any) {
+                    console.warn(`[RankingService] Failed to sync ranks for ${account.gameName}: ${e.message}`);
+                }
 
                 results.success.push(`${account.gameName} #${account.tagLine}`);
             } catch (error) {

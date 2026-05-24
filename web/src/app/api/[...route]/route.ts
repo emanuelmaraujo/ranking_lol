@@ -341,21 +341,9 @@ export async function POST(
                 return err('Failed to find players', 400, result);
             }
 
-            let syncWarning = undefined;
-            try {
-                if (addedCount > 0) {
-                    await syncService.runFastSync();
-                }
-            } catch (err: any) {
-                syncWarning = 'Players added, but initial data sync timed out. It will complete in the background.';
-            }
-
-            syncService.runBackgroundIngest().catch(e => console.error('Background Ingest Error:', e));
-
             return ok({
                 ...result,
-                message: 'Players added. Processing started.',
-                warning: syncWarning,
+                message: 'Players added and synced successfully.'
             });
         }
 
