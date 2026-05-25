@@ -444,16 +444,17 @@ export async function POST(
                 return err('No players specified', 400);
             }
 
-            const jobId = syncService.startManualJob(puuids, matchCount, queue);
-
-            return NextResponse.json(
-                {
-                    message: 'Update accepted',
-                    jobId,
-                    statusUrl: `/api/admin/jobs/${jobId}`,
-                },
-                { status: 202, headers: corsHeaders }
-            );
+            try {
+                console.log(`[API] Triggering Synchronous Manual Update for Vercel/Serverless compatibility...`);
+                const result = await syncService.manualUpdate(puuids, matchCount, queue);
+                return ok({
+                    message: 'Update complete (Sync)',
+                    summary: result.summary || result
+                });
+            } catch (e: any) {
+                console.error('[API] Manual Update Error:', e);
+                return err(e.message || 'Internal Server Eor', 500);
+            }
         }
 
         // No endpoint matched

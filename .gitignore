@@ -7,3 +7,16 @@ node_modules
 # Backups
 backups/
 *.sql
+
+# Graphify Output Caches & Visualization Reports
+graphify-out/
+
+# Temporary / Debug / Logs
+logs.txt
+response.json
+debug-api.js
+debug-ranking.js
+web/tsc_error.log
+
+# Vercel Caches
+.vercel/
