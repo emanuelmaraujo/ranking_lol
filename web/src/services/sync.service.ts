@@ -80,13 +80,9 @@ export class SyncService {
                 return;
             }
 
-            job.log.push(`Found ${players.length} players. Syncing static data & masteries (Force)...`);
+            job.log.push(`Found ${players.length} players. Syncing static data, masteries & ranks (Force)...`);
             job.updatedAt = new Date();
             await runSyncPlayers(playerPuuids, true);
-
-            job.log.push(`Syncing ranks...`);
-            job.updatedAt = new Date();
-            await runSyncRanks(playerPuuids);
 
             job.log.push(`Fetching matches...`);
 
@@ -174,21 +170,18 @@ export class SyncService {
     /**
      * Manual Update (Legacy/Synchronous wrapper if needed)
      */
-    async manualUpdate(playerPuuids: string[], limit: number = 5, queue: 'SOLO' | 'FLEX' | 'BOTH' = 'BOTH') {
+    async manualUpdate(playerPuuids: string[], limit: number = 5, queue: 'SOLO' | 'FLEX' | 'BOTH' = 'BOTH', start: number = 0) {
         const players = await prisma.player.findMany({
             where: { puuid: { in: playerPuuids } }
         });
 
         if (players.length === 0) return { success: false, message: 'No players found' };
 
-        // 1. Force sync static data & masteries (needed for main champion & skins)
+        // 1. Force sync static data, masteries & ranks (needed for main champion & skins)
         await runSyncPlayers(playerPuuids, true);
 
-        // 2. Sync ranks & snapshots
-        await runSyncRanks(playerPuuids);
-
-        // 3. Sync matches
-        const summary = await ingestPlayers(players, limit, queue);
+        // 2. Sync matches with page offset
+        const summary = await ingestPlayers(players, limit, queue, undefined, undefined, start);
         return { success: true, summary };
     }
 

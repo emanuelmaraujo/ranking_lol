@@ -439,14 +439,16 @@ export async function POST(
                 return err('Unauthorized', 401);
             }
 
-            const { puuids, matchCount = 5, queue = 'BOTH' } = body;
+            const { puuids, matchCount = 5, queue = 'BOTH', start = 0 } = body;
             if (!puuids || puuids.length === 0) {
                 return err('No players specified', 400);
             }
 
             try {
                 console.log(`[API] Triggering Synchronous Manual Update for Vercel/Serverless compatibility...`);
-                const result = await syncService.manualUpdate(puuids, matchCount, queue);
+                // Cap matchCount at 15 for Vercel Serverless compatibility to guarantee zero timeouts
+                const cappedLimit = Math.min(Number(matchCount) || 5, 15);
+                const result = await syncService.manualUpdate(puuids, cappedLimit, queue, Number(start) || 0);
                 return ok({
                     message: 'Update complete (Sync)',
                     summary: result.summary || result

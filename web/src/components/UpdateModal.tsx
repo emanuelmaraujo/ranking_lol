@@ -72,7 +72,7 @@ export function UpdateModal({ isOpen, onClose, availablePlayers }: UpdateModalPr
 
         setStatus('PROCESSING');
         setProgress(0);
-        setLog(['🚀 Iniciando atualização manual sequencial...']);
+        setLog(['🚀 Iniciando atualização manual paginada sequencial...']);
 
         let completed = 0;
         const total = selectedPuuids.length;
@@ -81,26 +81,54 @@ export function UpdateModal({ isOpen, onClose, availablePlayers }: UpdateModalPr
             const player = availablePlayers.find(p => p.puuid === puuid);
             const playerName = player ? `${player.gameName} #${player.tagLine}` : `Jogador (${puuid.substring(0, 8)})`;
             
-            setLog(prev => [...prev, `⏳ Sincronizando ${playerName}...`]);
+            setLog(prev => [...prev, `⏳ Sincronizando ${playerName} (solicitado: ${matchCount} partidas)...`]);
 
             try {
-                const res = await fetch('/api/admin/manual-update', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-admin-password': adminPassword
-                    },
-                    body: JSON.stringify({
-                        puuids: [puuid],
-                        matchCount,
-                        queue
-                    })
-                });
+                const CHUNK_SIZE = 15;
+                let startOffset = 0;
 
-                const data = await res.json();
+                while (startOffset < matchCount) {
+                    const currentBatch = Math.min(CHUNK_SIZE, matchCount - startOffset);
+                    const rangeText = `${startOffset + 1} a ${startOffset + currentBatch}`;
+                    setLog(prev => [...prev, `   -> Buscando partidas ${rangeText}...`]);
 
-                if (!res.ok) {
-                    throw new Error(data.error || 'Erro na requisição');
+                    const res = await fetch('/api/admin/manual-update', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-admin-password': adminPassword
+                        },
+                        body: JSON.stringify({
+                            puuids: [puuid],
+                            matchCount: currentBatch,
+                            queue,
+                            start: startOffset
+                        })
+                    });
+
+                    const data = await res.json();
+
+                    if (!res.ok) {
+                        throw new Error(data.error || 'Erro na requisição');
+                    }
+
+                    const summary = data.summary || {};
+                    const saved = summary.matchesSaved ?? 0;
+                    const exists = summary.matchesAlreadyProcessed ?? 0;
+                    const found = summary.matchesFound ?? 0;
+
+                    setLog(prev => [...prev, `   ✅ Partidas ${rangeText} processadas (Novas: ${saved}, Já importadas: ${exists})`]);
+
+                    // Optimization: If the backend returned fewer match IDs than the requested batch,
+                    // it means the player has no more matches in their history. We stop immediately.
+                    if (found < currentBatch) {
+                        setLog(prev => [...prev, `   -> Fim do histórico disponível na Riot.`]);
+                        break;
+                    }
+
+                    startOffset += currentBatch;
+                    // Minor pause between chunks to give the API Key cooldown breathing room
+                    await new Promise(r => setTimeout(r, 200));
                 }
 
                 completed++;
@@ -247,7 +275,7 @@ export function UpdateModal({ isOpen, onClose, availablePlayers }: UpdateModalPr
                                     />
                                     <div className="flex justify-between mt-2 text-[10px] text-gray-600 font-mono">
                                         <span>Rápido (1)</span>
-                                        <span>Extremo (200)</span>
+                                        <span>Alta Capacidade (200)</span>
                                     </div>
                                 </div>
                             </div>

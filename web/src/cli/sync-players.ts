@@ -177,6 +177,17 @@ export async function runSyncPlayers(specificPuuids?: string[], force = false) {
                     }
                 });
                 console.log(`   -> Rank Salvo: ${queue} ${entry.tier} ${entry.rank} ${entry.leaguePoints}pdl`);
+
+                // CRITICAL FIX: Keep the Player model's tier and rank in sync for SOLO queue.
+                if (queue === 'SOLO') {
+                    await prisma.player.update({
+                        where: { puuid },
+                        data: {
+                            tier: entry.tier,
+                            rank: entry.rank
+                        }
+                    });
+                }
             }
 
         } catch (err: any) {

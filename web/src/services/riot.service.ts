@@ -92,14 +92,14 @@ export class RiotService {
    * Supports specific queueIds: 420 (Solo) and 440 (Flex)
    * Region Routing: Uses 'americas' for Match-V5 (cluster) and specific platform (e.g. 'br1') for Account-V1
    */
-    async getRecentMatchIds(puuid: string, queueId?: number, count: number = 20): Promise<string[]> {
+    async getRecentMatchIds(puuid: string, queueId?: number, count: number = 20, start: number = 0): Promise<string[]> {
         const MAX_PER_REQ = 100;
         let allIds: string[] = [];
         let fetched = 0;
 
         while (fetched < count) {
             const currentBatchSize = Math.min(count - fetched, MAX_PER_REQ);
-            let url = `${this.regionUrl}/lol/match/v5/matches/by-puuid/${puuid}/ids?start=${fetched}&count=${currentBatchSize}`;
+            let url = `${this.regionUrl}/lol/match/v5/matches/by-puuid/${puuid}/ids?start=${start + fetched}&count=${currentBatchSize}`;
             if (queueId) {
                 url += `&queue=${queueId}`;
             }

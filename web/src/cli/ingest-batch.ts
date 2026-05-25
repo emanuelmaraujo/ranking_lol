@@ -36,7 +36,8 @@ export async function ingestPlayers(
     matchLimit: number = 20,
     queueFilter: 'SOLO' | 'FLEX' | 'BOTH' = 'BOTH',
     riotService?: RiotService,
-    onProgress?: (processed: number, total: number | null) => void // Added Callback
+    onProgress?: (processed: number, total: number | null) => void, // Added Callback
+    startOffset: number = 0
 ) {
     if (!riotService) {
         const apiKey = process.env.RIOT_API_KEY;
@@ -72,11 +73,11 @@ export async function ingestPlayers(
             const tasks: { ids: string[]; label: string }[] = [];
 
             if (queueFilter === 'SOLO' || queueFilter === 'BOTH') {
-                const soloIds = await riotService.getRecentMatchIds(player.puuid, 420, matchLimit);
+                const soloIds = await riotService.getRecentMatchIds(player.puuid, 420, matchLimit, startOffset);
                 tasks.push({ ids: soloIds, label: 'SOLO' });
             }
             if (queueFilter === 'FLEX' || queueFilter === 'BOTH') {
-                const flexIds = await riotService.getRecentMatchIds(player.puuid, 440, matchLimit);
+                const flexIds = await riotService.getRecentMatchIds(player.puuid, 440, matchLimit, startOffset);
                 tasks.push({ ids: flexIds, label: 'FLEX' });
             }
 
