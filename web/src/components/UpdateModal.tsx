@@ -23,6 +23,14 @@ export function UpdateModal({ isOpen, onClose, availablePlayers }: UpdateModalPr
     const [intervalId, setIntervalId] = useState<NodeJS.Timeout | null>(null);
     const logRef = useRef<HTMLDivElement>(null);
 
+    const handleClose = () => {
+        if (status === 'SUCCESS') {
+            window.location.reload();
+        } else {
+            onClose();
+        }
+    };
+
     // Auto-scroll logs
     useEffect(() => {
         if (logRef.current) {
@@ -64,89 +72,54 @@ export function UpdateModal({ isOpen, onClose, availablePlayers }: UpdateModalPr
 
         setStatus('PROCESSING');
         setProgress(0);
-        setLog(['🚀 Iniciando atualização manual (Async)...']);
+        setLog(['🚀 Iniciando atualização manual sequencial...']);
 
-        try {
-            const res = await fetch('/api/admin/manual-update', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-admin-password': adminPassword
-                },
-                body: JSON.stringify({
-                    puuids: selectedPuuids,
-                    matchCount,
-                    queue
-                })
-            });
+        let completed = 0;
+        const total = selectedPuuids.length;
 
-            const data = await res.json();
+        for (const puuid of selectedPuuids) {
+            const player = availablePlayers.find(p => p.puuid === puuid);
+            const playerName = player ? `${player.gameName} #${player.tagLine}` : `Jogador (${puuid.substring(0, 8)})`;
+            
+            setLog(prev => [...prev, `⏳ Sincronizando ${playerName}...`]);
 
-            if (!res.ok) {
-                throw new Error(data.error || 'Erro na requisição');
+            try {
+                const res = await fetch('/api/admin/manual-update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-admin-password': adminPassword
+                    },
+                    body: JSON.stringify({
+                        puuids: [puuid],
+                        matchCount,
+                        queue
+                    })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.error || 'Erro na requisição');
+                }
+
+                completed++;
+                const percent = Math.round((completed / total) * 100);
+                setProgress(percent);
+                setLog(prev => [...prev, `✅ ${playerName} atualizado com sucesso!`]);
+
+            } catch (error: any) {
+                console.error(error);
+                setLog(prev => [...prev, `❌ Erro ao atualizar ${playerName}: ${error.message}`]);
+                completed++;
+                const percent = Math.round((completed / total) * 100);
+                setProgress(percent);
             }
-
-            // If Async Job Started (Status 202)
-            if (res.status === 202 && data.jobId) {
-                setLog(prev => [...prev, `✅ Job iniciado: ${data.jobId}`, '🔄 Monitorando progresso...']);
-
-                // Polling Loop
-                const id = setInterval(async () => {
-                    try {
-                        const statusRes = await fetch(`/api/admin/jobs/${data.jobId}`, {
-                            headers: { 'x-admin-password': adminPassword }
-                        });
-
-                        if (!statusRes.ok) throw new Error('Erro ao buscar status');
-
-                        const job = await statusRes.json();
-
-                        // Update State
-                        if (job.log && job.log.length > 0) {
-                            setLog(job.log); // Sync full log
-                        }
-
-                        // Update Progress
-                        const total = job.total || (selectedPuuids.length * matchCount) || 100;
-                        const percent = Math.min(Math.round((job.progress / total) * 100), 99);
-                        setProgress(percent);
-
-                        if (job.state === 'COMPLETED') {
-                            setStatus('SUCCESS');
-                            setProgress(100);
-                            setLog(prev => [...prev, '✨ Concluído com sucesso!']);
-                            // Clear interval via state setter logic
-                            clearInterval(id);
-                        } else if (job.state === 'ERROR') {
-                            setStatus('ERROR');
-                            setLog(prev => [...prev, `❌ Falha no Job: ${job.error}`]);
-                            clearInterval(id);
-                        }
-
-                    } catch (pollErr) {
-                        console.error(pollErr);
-                    }
-                }, 1000);
-
-                setIntervalId(id);
-
-            } else {
-                // Synchronous fallback (legacy or fast path)
-                setLog(prev => [
-                    ...prev,
-                    `✅ Sucesso (Sync)!`,
-                    `Resumo: ${JSON.stringify(data.summary || data)}`
-                ]);
-                setStatus('SUCCESS');
-                setProgress(100);
-            }
-
-        } catch (error: any) {
-            console.error(error);
-            setLog(prev => [...prev, `❌ Erro: ${error.message}`]);
-            setStatus('ERROR');
-            setProgress(0);
         }
+
+        setStatus('SUCCESS');
+        setProgress(100);
+        setLog(prev => [...prev, `✨ Sincronização concluída com sucesso! ${completed}/${total} processados.`]);
     };
 
     return (
@@ -169,7 +142,7 @@ export function UpdateModal({ isOpen, onClose, availablePlayers }: UpdateModalPr
                                 <p className="text-sm text-gray-400 mt-1">Force a atualização de dados em tempo real.</p>
                             </div>
                         </div>
-                        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-xl transition-colors text-gray-500 hover:text-white">
+                        <button onClick={handleClose} className="p-2 hover:bg-white/10 rounded-xl transition-colors text-gray-500 hover:text-white">
                             <X className="w-5 h-5" />
                         </button>
                     </div>
@@ -323,7 +296,7 @@ export function UpdateModal({ isOpen, onClose, availablePlayers }: UpdateModalPr
                 {/* Footer */}
                 <div className="p-6 border-t border-white/5 bg-[#12141a]/50 backdrop-blur-sm flex justify-end gap-3 z-20">
                     <button
-                        onClick={onClose}
+                        onClick={handleClose}
                         className="px-6 py-3 text-sm font-bold text-gray-400 hover:text-white transition-colors"
                         disabled={status === 'PROCESSING'}
                     >
