@@ -453,7 +453,7 @@ export async function POST(
                 });
             } catch (e: any) {
                 console.error('[API] Manual Update Error:', e);
-                return err(e.message || 'Internal Server Eor', 500);
+                return err(e.message || 'Internal Server Error', 500);
             }
         }
 
