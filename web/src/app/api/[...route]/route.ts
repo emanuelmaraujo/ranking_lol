@@ -448,14 +448,19 @@ export async function POST(
                 console.log(`[API] Triggering Synchronous Manual Update for Vercel/Serverless compatibility...`);
                 // Cap matchCount at 15 for Vercel Serverless compatibility to guarantee zero timeouts
                 const cappedLimit = Math.min(Number(matchCount) || 5, 15);
-                const result = await syncService.manualUpdate(puuids, cappedLimit, queue, Number(start) || 0);
+                
+                // Configure RiotService for fast-failing on 429 rate limit
+                riotService.failFastOn429 = true;
+                
+                const result = await syncService.manualUpdate(puuids, cappedLimit, queue, Number(start) || 0, riotService);
                 return ok({
                     message: 'Update complete (Sync)',
                     summary: result.summary || result
                 });
             } catch (e: any) {
                 console.error('[API] Manual Update Error:', e);
-                return err(e.message || 'Internal Server Error', 500);
+                const isRateLimit = e.response?.status === 429 || e.status === 429 || String(e.message).includes('429');
+                return err(e.message || 'Internal Server Error', isRateLimit ? 429 : 500);
             }
         }
 

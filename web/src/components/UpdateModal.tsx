@@ -106,6 +106,13 @@ export function UpdateModal({ isOpen, onClose, availablePlayers }: UpdateModalPr
                         })
                     });
 
+                    // Handle rate limit (429) from backend by pausing and retrying
+                    if (res.status === 429) {
+                        setLog(prev => [...prev, `⚠️ Limite de taxa Riot atingido. Pausando 15s para cooldown antes de tentar novamente...`]);
+                        await new Promise(r => setTimeout(r, 15000));
+                        continue; // Repeat the loop iteration with the SAME startOffset
+                    }
+
                     const data = await res.json();
 
                     if (!res.ok) {

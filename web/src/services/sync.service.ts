@@ -4,6 +4,7 @@ import { runSyncRanks } from '../cli/sync-ranks';
 import { runIngestBatch, ingestPlayers } from '../cli/ingest-batch';
 import { runRankingSeason } from '../cli/ranking-season';
 import { randomUUID } from 'crypto';
+import { RiotService } from './riot.service';
 
 export interface JobStatus {
     id: string;
@@ -170,7 +171,7 @@ export class SyncService {
     /**
      * Manual Update (Legacy/Synchronous wrapper if needed)
      */
-    async manualUpdate(playerPuuids: string[], limit: number = 5, queue: 'SOLO' | 'FLEX' | 'BOTH' = 'BOTH', start: number = 0) {
+    async manualUpdate(playerPuuids: string[], limit: number = 5, queue: 'SOLO' | 'FLEX' | 'BOTH' = 'BOTH', start: number = 0, riotService?: RiotService) {
         const players = await prisma.player.findMany({
             where: { puuid: { in: playerPuuids } }
         });
@@ -178,10 +179,10 @@ export class SyncService {
         if (players.length === 0) return { success: false, message: 'No players found' };
 
         // 1. Force sync static data, masteries & ranks (needed for main champion & skins)
-        await runSyncPlayers(playerPuuids, true);
+        await runSyncPlayers(playerPuuids, true, riotService);
 
         // 2. Sync matches with page offset
-        const summary = await ingestPlayers(players, limit, queue, undefined, undefined, start);
+        const summary = await ingestPlayers(players, limit, queue, riotService, undefined, start);
         return { success: true, summary };
     }
 

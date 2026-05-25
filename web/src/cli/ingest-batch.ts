@@ -281,6 +281,9 @@ export async function ingestPlayers(
                     } catch (matchError: any) {
                         console.error(`${matchPrefix} Error: ${matchError.message}`);
                         summary.errors++;
+                        if (matchError.response?.status === 429 || matchError.status === 429 || String(matchError.message).includes('429')) {
+                            throw matchError;
+                        }
                     }
                 } // End Match Loop
             } // End Task Loop
@@ -288,6 +291,9 @@ export async function ingestPlayers(
         } catch (playerError: any) {
             console.error(`${logPrefix} Failed to process player: ${playerError.message}`);
             summary.errors++;
+            if (playerError.response?.status === 429 || playerError.status === 429 || String(playerError.message).includes('429')) {
+                throw playerError;
+            }
         }
     } // End Player Loop
 

@@ -26,7 +26,7 @@ async function loadChampionMap() {
     }
 }
 
-export async function runSyncPlayers(specificPuuids?: string[], force = false) {
+export async function runSyncPlayers(specificPuuids?: string[], force = false, passedRiotService?: RiotService) {
     console.log('🔄 Iniciando Sincronização Completa (Evolution)...');
     await loadChampionMap();
 
@@ -39,6 +39,8 @@ export async function runSyncPlayers(specificPuuids?: string[], force = false) {
         }
     });
     console.log(`Found ${activePlayers.length} active players in Database.`);
+
+    const activeRiotService = passedRiotService || riotService;
 
     for (const player of activePlayers) {
         try {
@@ -62,7 +64,7 @@ export async function runSyncPlayers(specificPuuids?: string[], force = false) {
             } else {
                 // Update Summoner Info (Icon & Level)
                 console.log('   -> Atualizando Ícone e Nível...');
-                const summoner = await riotService.getSummonerByPuuid(puuid);
+                const summoner = await activeRiotService.getSummonerByPuuid(puuid);
                 await prisma.player.update({
                     where: { puuid },
                     data: {
@@ -74,7 +76,7 @@ export async function runSyncPlayers(specificPuuids?: string[], force = false) {
 
                 // Update Champion Masteries
                 console.log('   -> Baixando Maestrias...');
-                const masteries = await riotService.getChampionMasteries(puuid, 12); // Top 12
+                const masteries = await activeRiotService.getChampionMasteries(puuid, 12); // Top 12
                 for (const m of masteries) {
                     const champName = CHAMPION_MAP[m.championId] || `Champ ${m.championId}`;
 
@@ -121,7 +123,7 @@ export async function runSyncPlayers(specificPuuids?: string[], force = false) {
 
             // 5. League V4 (Rank/Tier) - Now using PUUID directly (User feedback)
             console.log('   -> Verificando Liga (League-V4 by PUUID)...');
-            const leagues = await riotService.getLeagueEntriesByPuuid(puuid);
+            const leagues = await activeRiotService.getLeagueEntriesByPuuid(puuid);
             for (const queue of ['SOLO', 'FLEX']) {
                 const riotQueueType = queue === 'SOLO' ? 'RANKED_SOLO_5x5' : 'RANKED_FLEX_SR';
                 const entry = leagues.find((l: any) => l.queueType === riotQueueType);

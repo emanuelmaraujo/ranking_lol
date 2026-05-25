@@ -8,6 +8,7 @@ export class RiotService {
     private readonly limiter: Bottleneck;
     private readonly axiosInstance: any;
     private skinCache = new Map<string, { name: string; splashUrl: string; loadingUrl: string } | null>();
+    public failFastOn429: boolean = false;
 
     constructor(apiKey: string) {
         this.apiKey = apiKey;
@@ -32,6 +33,10 @@ export class RiotService {
         this.limiter.on('failed', async (error: any, jobInfo) => {
             const status = error.response?.status;
             if (status === 429) {
+                if (this.failFastOn429) {
+                    console.warn(`⚠️ Rate Limit Hit. FailFast is active, throwing error immediately.`);
+                    return null; // Return null to not retry, throwing the error to the caller
+                }
                 const retryAfter = parseInt(error.response?.headers['retry-after'] || '10', 10);
                 console.warn(`⏳ Rate Limit Hit. Waiting ${retryAfter}s...`);
                 return retryAfter * 1000 + 1000; // Wait + Buffer
