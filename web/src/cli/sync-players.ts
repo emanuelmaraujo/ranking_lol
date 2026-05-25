@@ -15,7 +15,7 @@ async function loadChampionMap() {
     try {
         console.log('🗺️  Baixando DataDragon Champions...');
         const res = await axios.get('https://ddragon.leagueoflegends.com/cdn/16.1.1/data/pt_BR/champion.json');
-        const data = res.data.data;
+        const data = (res as any).data.data;
         for (const key in data) {
             const champ = data[key];
             CHAMPION_MAP[parseInt(champ.key)] = champ.name;
@@ -52,7 +52,7 @@ export async function runSyncPlayers() {
             const hoursDiff = (now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60);
             const isFresh = hoursDiff < 24;
 
-            if (false && isFresh && player.profileIconId) {
+            if (isFresh && player.profileIconId) {
                 console.log('   -> Dados em cache (24h). Pulando atualização estática (Ícone/Maestria).');
             } else {
                 // Update Summoner Info (Icon & Level)

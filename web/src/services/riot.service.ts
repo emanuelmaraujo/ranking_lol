@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios';
+import axios from 'axios';
 import Bottleneck from 'bottleneck';
 
 export class RiotService {
@@ -6,7 +6,8 @@ export class RiotService {
     private readonly platformUrl = 'https://br1.api.riotgames.com'; // Default to BR1 for Summoner V4
     private readonly apiKey: string;
     private readonly limiter: Bottleneck;
-    private readonly axiosInstance: AxiosInstance;
+    private readonly axiosInstance: any;
+    private skinCache = new Map<string, { name: string; splashUrl: string; loadingUrl: string } | null>();
 
     constructor(apiKey: string) {
         this.apiKey = apiKey;
@@ -52,8 +53,8 @@ export class RiotService {
                 // Pre-flight check could go here if we tracked global state, 
                 // but diff-check is mostly business logic (DB vs API).
 
-                const response = await this.axiosInstance.get<T>(url);
-                return response.data;
+                const response = await this.axiosInstance.get(url);
+                return response.data as T;
             } catch (error: any) {
                 if (error.response?.status === 429) {
                     // Re-throw to be caught by limiter 'failed' listener or caller
@@ -163,6 +164,9 @@ export class RiotService {
      * Returns the splash URL of a RANDOM skin from the list (including default and legacy)
      */
     async getRandomSkin(championName: string): Promise<{ name: string; splashUrl: string; loadingUrl: string } | null> {
+        if (this.skinCache.has(championName)) {
+            return this.skinCache.get(championName) || null;
+        }
         try {
             // Normalize Name for Data Dragon
             // 1. Explicit Overrides for Void/Special Characters
@@ -206,7 +210,7 @@ export class RiotService {
 
             // Bypass rate limiter for DataDragon (It's a CDN)
             const res = await axios.get(url);
-            const data = res.data.data[cName];
+            const data = (res as any).data.data[cName];
 
             if (!data || !data.skins || data.skins.length === 0) return null;
 
@@ -218,13 +222,16 @@ export class RiotService {
             const randomIndex = Math.floor(Math.random() * pool.length);
             const skin = pool[randomIndex];
 
-            return {
+            const result = {
                 name: skin.name,
                 splashUrl: `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${cName}_${skin.num}.jpg`,
                 loadingUrl: `https://ddragon.leagueoflegends.com/cdn/img/champion/loading/${cName}_${skin.num}.jpg`
             };
+            this.skinCache.set(championName, result);
+            return result;
         } catch (e) {
             console.error(`[RiotService] Failed to fetch skin for ${championName}`, e);
+            this.skinCache.set(championName, null);
             return null;
         }
     }

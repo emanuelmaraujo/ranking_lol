@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { getSystemStatus } from "@/lib/api";
 // import { formatDistanceToNow } from "date-fns"; // Removed
 // import { ptBR } from "date-fns/locale"; // Removed
@@ -25,8 +25,15 @@ export function Sidebar({ onClose }: SidebarProps) {
     const pathname = usePathname();
     const [status, setStatus] = useState<{ lastUpdate: string | null; nextUpdate: string | null }>({ lastUpdate: null, nextUpdate: null });
     const [timeLeft, setTimeLeft] = useState<string>("Carregando...");
+    const lastFetchRef = useRef<number>(0);
 
-    const updateStatus = async () => {
+    const updateStatus = async (force = false) => {
+        const now = Date.now();
+        // Throttle to 30 seconds unless forced (initial render)
+        if (!force && now - lastFetchRef.current < 30000) {
+            return;
+        }
+        lastFetchRef.current = now;
         try {
             const newStatus = await getSystemStatus();
             // Only update state if something changed to avoid re-renders/loops
@@ -43,7 +50,7 @@ export function Sidebar({ onClose }: SidebarProps) {
 
     // 1. Initial Load
     useEffect(() => {
-        updateStatus();
+        updateStatus(true);
     }, []);
 
     // 2. Smart Polling & Ticker
@@ -52,6 +59,7 @@ export function Sidebar({ onClose }: SidebarProps) {
             if (!status.nextUpdate) {
                 // If we don't have a next update, treat as "checking" or "in progress"
                 // and try to fetch one.
+                setTimeLeft("Calculando...");
                 updateStatus();
                 return;
             }
