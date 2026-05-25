@@ -13,7 +13,7 @@ const QUEUE_MAP = {
 
 
 
-export async function runSyncRanks() {
+export async function runSyncRanks(specificPuuids?: string[]) {
     console.log(`\n🔄 Starting Sync Ranks Job...`);
 
     const apiKey = process.env.RIOT_API_KEY;
@@ -24,7 +24,12 @@ export async function runSyncRanks() {
     const riotService = new RiotService(apiKey);
 
     try {
-        const players = await prisma.player.findMany({ where: { isActive: true } });
+        const players = await prisma.player.findMany({
+            where: {
+                isActive: true,
+                ...(specificPuuids ? { puuid: { in: specificPuuids } } : {})
+            }
+        });
         console.log(`Checking ${players.length} active players...`);
 
         for (const player of players) {

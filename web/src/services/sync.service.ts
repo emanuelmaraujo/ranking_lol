@@ -80,12 +80,19 @@ export class SyncService {
                 return;
             }
 
-            job.log.push(`Found ${players.length} players. Fetching matches...`);
+            job.log.push(`Found ${players.length} players. Syncing static data & masteries (Force)...`);
+            job.updatedAt = new Date();
+            await runSyncPlayers(playerPuuids, true);
+
+            job.log.push(`Syncing ranks...`);
+            job.updatedAt = new Date();
+            await runSyncRanks(playerPuuids);
+
+            job.log.push(`Fetching matches...`);
 
             // Ingest with callback
             const summary = await ingestPlayers(players, limit, queue, undefined, (processed, total) => {
                 job.progress = processed;
-                // job.total = total; // We don't really know total easily unless we sum up all matches found first
                 job.updatedAt = new Date();
             });
 
@@ -174,6 +181,13 @@ export class SyncService {
 
         if (players.length === 0) return { success: false, message: 'No players found' };
 
+        // 1. Force sync static data & masteries (needed for main champion & skins)
+        await runSyncPlayers(playerPuuids, true);
+
+        // 2. Sync ranks & snapshots
+        await runSyncRanks(playerPuuids);
+
+        // 3. Sync matches
         const summary = await ingestPlayers(players, limit, queue);
         return { success: true, summary };
     }

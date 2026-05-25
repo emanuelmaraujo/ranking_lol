@@ -26,13 +26,18 @@ async function loadChampionMap() {
     }
 }
 
-export async function runSyncPlayers() {
+export async function runSyncPlayers(specificPuuids?: string[], force = false) {
     console.log('🔄 Iniciando Sincronização Completa (Evolution)...');
     await loadChampionMap();
 
     const today = DateUtils.normalizeDate(new Date());
 
-    const activePlayers = await prisma.player.findMany({ where: { isActive: true } });
+    const activePlayers = await prisma.player.findMany({
+        where: {
+            isActive: true,
+            ...(specificPuuids ? { puuid: { in: specificPuuids } } : {})
+        }
+    });
     console.log(`Found ${activePlayers.length} active players in Database.`);
 
     for (const player of activePlayers) {
@@ -52,7 +57,7 @@ export async function runSyncPlayers() {
             const hoursDiff = (now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60);
             const isFresh = hoursDiff < 24;
 
-            if (isFresh && player.profileIconId) {
+            if (!force && isFresh && player.profileIconId) {
                 console.log('   -> Dados em cache (24h). Pulando atualização estática (Ícone/Maestria).');
             } else {
                 // Update Summoner Info (Icon & Level)
